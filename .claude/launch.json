@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ironlog-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "3200"],
+      "cwd": "C:\\Users\\reyno\\Documents\\Claude Code\\ironlog",
+      "port": 3200,
+      "autoPort": false
+    }
+  ]
+}
