@@ -3,27 +3,41 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+type Step = "email" | "sending" | "code" | "verifying" | "error";
+
 export function Login() {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
-    "idle",
-  );
+  const [code, setCode] = useState("");
+  const [step, setStep] = useState<Step>("email");
   const [error, setError] = useState("");
 
-  async function sendLink(e: React.FormEvent) {
+  async function sendCode(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
-    setStatus("sending");
+    setStep("sending");
     setError("");
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithOtp({ email: email.trim() });
+    if (error) {
+      setError(error.message);
+      setStep("error");
+    } else {
+      setStep("code");
+    }
+  }
+
+  async function verifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setStep("verifying");
+    setError("");
+    const { error } = await supabase.auth.verifyOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin },
+      token: code.trim(),
+      type: "email",
     });
     if (error) {
       setError(error.message);
-      setStatus("error");
-    } else {
-      setStatus("sent");
+      setStep("code");
     }
   }
 
@@ -36,12 +50,41 @@ export function Login() {
         <p className="mt-1 text-ink-soft">Track lifts, progress, and streaks.</p>
       </div>
 
-      {status === "sent" ? (
-        <div className="rounded-lg border border-mint/40 bg-mint/10 p-4 text-sm text-ink">
-          Check <span className="font-medium">{email}</span> for a sign-in link.
-        </div>
+      {step === "code" || step === "verifying" ? (
+        <form onSubmit={verifyCode} className="flex flex-col gap-3">
+          <p className="text-sm text-ink-soft">
+            Enter the code sent to{" "}
+            <span className="font-medium text-ink">{email}</span>
+          </p>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+            placeholder="123456"
+            maxLength={8}
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-center text-2xl tracking-widest text-ink outline-none focus:border-ember"
+          />
+          <button
+            type="submit"
+            disabled={step === "verifying"}
+            className="rounded-lg bg-ember px-4 py-2 font-medium text-night transition hover:bg-ember-soft disabled:opacity-60"
+          >
+            {step === "verifying" ? "Verifying…" : "Sign in"}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setStep("email"); setCode(""); setError(""); }}
+            className="text-sm text-ink-faint hover:text-ink-soft"
+          >
+            Use a different email
+          </button>
+          {error && <p className="text-sm text-ember-soft">{error}</p>}
+        </form>
       ) : (
-        <form onSubmit={sendLink} className="flex flex-col gap-3">
+        <form onSubmit={sendCode} className="flex flex-col gap-3">
           <label className="text-sm text-ink-soft" htmlFor="email">
             Email address
           </label>
@@ -56,12 +99,12 @@ export function Login() {
           />
           <button
             type="submit"
-            disabled={status === "sending"}
+            disabled={step === "sending"}
             className="rounded-lg bg-ember px-4 py-2 font-medium text-night transition hover:bg-ember-soft disabled:opacity-60"
           >
-            {status === "sending" ? "Sending…" : "Send magic link"}
+            {step === "sending" ? "Sending…" : "Send code"}
           </button>
-          {status === "error" && (
+          {step === "error" && (
             <p className="text-sm text-ember-soft">{error}</p>
           )}
         </form>
