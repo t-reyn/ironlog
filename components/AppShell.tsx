@@ -27,13 +27,14 @@ export function AppShell({ userEmail }: { userEmail: string }) {
   const draft = useStore((s) => s.draft);
   const [error, setError] = useState("");
   const [showStart, setShowStart] = useState(false);
+  const [showLogger, setShowLogger] = useState(false);
 
   useEffect(() => {
     hydrate().catch((e) => setError(e.message ?? String(e)));
   }, [hydrate]);
 
-  function go(tab: TabId) {
-    setActive(tab);
+  function openLogger() {
+    setShowLogger(true);
   }
 
   return (
@@ -46,7 +47,7 @@ export function AppShell({ userEmail }: { userEmail: string }) {
       </header>
 
       <button
-        onClick={draft ? () => go("log") : () => setShowStart(true)}
+        onClick={draft ? openLogger : () => setShowStart(true)}
         className="rounded-xl bg-ember py-3 text-center font-semibold text-night hover:bg-ember-soft"
       >
         {draft ? "Continue workout →" : "Start workout"}
@@ -66,8 +67,8 @@ export function AppShell({ userEmail }: { userEmail: string }) {
         </div>
       ) : (
         <main className="flex-1">
-          {active === "dashboard" && <Dashboard onStart={() => go("log")} />}
-          {active === "log" && (draft ? <WorkoutLogger /> : <History />)}
+          {active === "dashboard" && <Dashboard />}
+          {active === "log" && <History onStart={openLogger} />}
           {active === "progress" && <Progress />}
           {active === "tools" && <Tools />}
         </main>
@@ -80,9 +81,13 @@ export function AppShell({ userEmail }: { userEmail: string }) {
           onClose={() => setShowStart(false)}
           onStart={() => {
             setShowStart(false);
-            go("log");
+            setShowLogger(true);
           }}
         />
+      )}
+
+      {showLogger && draft && (
+        <WorkoutLogger onClose={() => setShowLogger(false)} />
       )}
     </div>
   );

@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { updateProfile } from "@/lib/db";
 import { exportWorkoutsToCsv, downloadCsv } from "@/lib/csv";
-import { estimateOneRepMax, blendedOneRepMax, round1 } from "@/lib/oneRepMax";
-import { ExercisePicker } from "./ExercisePicker";
+import { estimateOneRepMax, round1 } from "@/lib/oneRepMax";
 import type { Unit } from "@/lib/types";
 
 export function Tools() {
@@ -19,31 +18,6 @@ export function Tools() {
 
   const [weight, setWeight] = useState(100);
   const [reps, setReps] = useState(5);
-  const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
-  const [pickingExercise, setPickingExercise] = useState(false);
-
-  const selectedExercise = useMemo(
-    () => exercises.find((e) => e.id === selectedExerciseId) ?? null,
-    [exercises, selectedExerciseId],
-  );
-
-  const bestSet = useMemo(() => {
-    if (!selectedExerciseId) return null;
-    let best: { weight: number; reps: number } | null = null;
-    let bestOrm = 0;
-    for (const w of workouts) {
-      for (const s of w.sets) {
-        if (s.exercise_id === selectedExerciseId && !s.is_warmup && s.completed) {
-          const orm = blendedOneRepMax(s.weight, s.reps);
-          if (orm > bestOrm) {
-            bestOrm = orm;
-            best = { weight: s.weight, reps: s.reps };
-          }
-        }
-      }
-    }
-    return best;
-  }, [selectedExerciseId, workouts]);
 
   async function setUnit(u: Unit) {
     await updateProfile({ unit: u });
@@ -68,47 +42,9 @@ export function Tools() {
       {/* 1RM calculator */}
       <section className="rounded-xl border border-line bg-surface/70 p-4">
         <h3 className="mb-3 font-medium">
-          One-rep max estimator
-          {selectedExercise && (
-            <span className="ml-2 font-normal text-ember">— {selectedExercise.name}</span>
-          )}
+          One-rep max estimator{" "}
+          <span className="font-normal text-ink-faint">(Epley)</span>
         </h3>
-
-        <div className="mb-3 flex items-center gap-2">
-          <button
-            onClick={() => setPickingExercise(true)}
-            className="flex-1 rounded-md border border-line bg-night px-3 py-1.5 text-left text-sm text-ink-soft hover:text-ink"
-          >
-            {selectedExercise ? selectedExercise.name : "Select an exercise…"}
-          </button>
-          {selectedExercise && (
-            <button
-              onClick={() => setSelectedExerciseId(null)}
-              className="shrink-0 text-ink-faint hover:text-ember-soft"
-              title="Clear exercise"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
-        {bestSet && (
-          <div className="mb-3 flex items-center gap-2 rounded-lg border border-line bg-night/60 px-3 py-2 text-sm">
-            <span className="text-ink-soft">Best set:</span>
-            <span className="text-ink">
-              {bestSet.weight} {unit} × {bestSet.reps} reps
-            </span>
-            <button
-              onClick={() => {
-                setWeight(bestSet.weight);
-                setReps(bestSet.reps);
-              }}
-              className="ml-auto rounded bg-ember/10 px-2 py-0.5 text-xs text-ember hover:bg-ember/20"
-            >
-              Use
-            </button>
-          </div>
-        )}
 
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col text-sm text-ink-soft">
@@ -197,15 +133,6 @@ export function Tools() {
         Sign out
       </button>
 
-      {pickingExercise && (
-        <ExercisePicker
-          onPick={(id) => {
-            setSelectedExerciseId(id);
-            setPickingExercise(false);
-          }}
-          onClose={() => setPickingExercise(false)}
-        />
-      )}
     </div>
   );
 }

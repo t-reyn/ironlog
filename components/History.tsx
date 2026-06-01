@@ -12,7 +12,7 @@ function fmtDuration(s: number | null) {
   return `${Math.floor(s / 3600)}h ${Math.round((s % 3600) / 60)}m`;
 }
 
-export function History() {
+export function History({ onStart }: { onStart: () => void }) {
   const workouts = useStore((s) => s.workouts);
   const exercises = useStore((s) => s.exercises);
   const startEdit = useStore((s) => s.startEdit);
@@ -40,11 +40,13 @@ export function History() {
   function editWorkout(w: (typeof allWorkouts)[number]) {
     if (draft && !window.confirm("Replace the workout in progress?")) return;
     startEdit(w);
+    onStart();
   }
 
   function repeatWorkout(w: (typeof allWorkouts)[number]) {
     if (draft && !window.confirm("Replace the workout in progress?")) return;
     startFromWorkout(w);
+    onStart();
   }
 
   return (

@@ -34,24 +34,11 @@ const BIG5_LABELS: Record<string, string> = {
   "Barbell Row": "Row",
 };
 
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
-}
-
-function fmtDuration(s: number | null): string | null {
-  if (!s) return null;
-  if (s < 3600) return `${Math.round(s / 60)}m`;
-  return `${Math.floor(s / 3600)}h ${Math.round((s % 3600) / 60)}m`;
-}
-
-export function Dashboard({ onStart }: { onStart: () => void }) {
+export function Dashboard() {
   const workouts = useStore((s) => s.workouts);
   const exercises = useStore((s) => s.exercises);
   const profile = useStore((s) => s.profile);
   const unit = profile?.unit ?? "kg";
-  const startFromWorkout = useStore((s) => s.startFromWorkout);
-  const startEdit = useStore((s) => s.startEdit);
-  const draft = useStore((s) => s.draft);
 
   const { current, longest, total, thisWeek } = useMemo(() => {
     const totals = dailyTotals(workouts);
@@ -60,7 +47,6 @@ export function Dashboard({ onStart }: { onStart: () => void }) {
     let total = 0;
     totals.forEach((t) => (total += t.count));
 
-    // Sessions in the last 7 calendar days.
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 6);
     weekAgo.setHours(0, 0, 0, 0);
@@ -88,37 +74,6 @@ export function Dashboard({ onStart }: { onStart: () => void }) {
       return { name, label: BIG5_LABELS[name], orm: bestOrm > 0 ? round1(bestOrm) : null };
     });
   }, [workouts, exercises]);
-
-  const recentWorkouts = useMemo(() => {
-    return [...workouts]
-      .sort((a, b) => b.performed_at.localeCompare(a.performed_at))
-      .slice(0, 8)
-      .map((w) => {
-        const seen = new Set<string>();
-        const exerciseNames: string[] = [];
-        for (const s of w.sets) {
-          if (!seen.has(s.exercise_id)) {
-            seen.add(s.exercise_id);
-            const ex = exercises.find((e) => e.id === s.exercise_id);
-            if (ex) exerciseNames.push(ex.name);
-          }
-        }
-        const workingSetCount = w.sets.filter((s) => !s.is_warmup && s.completed).length;
-        return { ...w, exerciseNames, workingSetCount };
-      });
-  }, [workouts, exercises]);
-
-  function repeatWorkout(w: (typeof recentWorkouts)[number]) {
-    if (draft && !window.confirm("Replace the workout in progress?")) return;
-    startFromWorkout(w);
-    onStart();
-  }
-
-  function editWorkout(w: (typeof recentWorkouts)[number]) {
-    if (draft && !window.confirm("Replace the workout in progress?")) return;
-    startEdit(w);
-    onStart();
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -155,59 +110,6 @@ export function Dashboard({ onStart }: { onStart: () => void }) {
         <h2 className="mb-1 text-sm font-medium text-ink-soft">Muscle distribution</h2>
         <MuscleRadar />
       </section>
-
-      <section className="rounded-xl border border-line bg-surface/70 p-4">
-        <h2 className="mb-3 text-sm font-medium text-ink-soft">Recent workouts</h2>
-        {recentWorkouts.length === 0 ? (
-          <p className="text-sm text-ink-faint">No workouts logged yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {recentWorkouts.map((w) => {
-              const dur = fmtDuration(w.duration_seconds);
-              return (
-                <li key={w.id} className="rounded-lg border border-line bg-night p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="font-medium text-ink">{w.name}</span>
-                      <div className="mt-1 flex items-center gap-2 text-xs text-ink-soft">
-                        <span>{fmtDate(w.performed_at)}</span>
-                        <span className="text-ink-faint">·</span>
-                        <span>{w.workingSetCount} sets</span>
-                        {dur && (
-                          <>
-                            <span className="text-ink-faint">·</span>
-                            <span>{dur}</span>
-                          </>
-                        )}
-                      </div>
-                      {w.exerciseNames.length > 0 && (
-                        <p className="mt-1.5 truncate text-xs text-ink-faint">
-                          {w.exerciseNames.join(" · ")}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 gap-1.5">
-                      <button
-                        onClick={() => editWorkout(w)}
-                        className="rounded-lg border border-line px-3 py-1.5 text-sm text-ink-soft hover:text-ink"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => repeatWorkout(w)}
-                        className="rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-night hover:bg-ember-soft"
-                      >
-                        Repeat
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
     </div>
   );
 }
