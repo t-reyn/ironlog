@@ -42,7 +42,7 @@ export function Login() {
 
     if (error) {
       if (error.message.toLowerCase().includes("already registered")) {
-        setError("Account exists — sign in with your password, or use "Set a password" below if you haven't set one yet.");
+        setError("Account exists — sign in with your password, or use 'Set a password' below if you haven't set one yet.");
       } else {
         setError(error.message);
       }
