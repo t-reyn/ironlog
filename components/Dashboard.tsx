@@ -151,15 +151,17 @@ export function Dashboard({ onStart }: { onStart: () => void }) {
         <Stat label="Total sessions" value={`${total}`} />
       </div>
 
-      <div className="grid grid-cols-5 gap-2">
-        {big4Orm.map(({ label, orm }) => (
-          <div key={label} className="rounded-xl border border-line bg-surface/70 p-3 text-center">
-            <div className="text-xs text-ink-faint">{label}</div>
-            <div className="text-2xl font-bold text-ember">{orm ?? "—"}</div>
-            <div className="text-xs text-ink-faint">{orm ? unit : "no data"}</div>
-          </div>
-        ))}
-      </div>
+      {big4Orm.some(({ orm }) => orm !== null) && (
+        <div className="grid grid-cols-5 gap-2">
+          {big4Orm.map(({ label, orm }) => (
+            <div key={label} className="rounded-xl border border-line bg-surface/70 p-3 text-center">
+              <div className="text-xs text-ink-faint">{label}</div>
+              <div className="text-2xl font-bold text-ember">{orm ?? "—"}</div>
+              <div className="text-xs text-ink-faint">{orm ? unit : "no data"}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <section className="rounded-xl border border-line bg-surface/70 p-4">
         <h2 className="mb-3 text-sm font-medium text-ink-soft">Activity</h2>
