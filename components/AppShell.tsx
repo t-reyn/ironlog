@@ -9,13 +9,13 @@ import { History } from "./History";
 import { Progress } from "./Progress";
 import { Tools } from "./Tools";
 import { RestTimer } from "./RestTimer";
+import { StartModal } from "./StartModal";
 
-type TabId = "dashboard" | "log" | "templates" | "progress" | "tools";
+type TabId = "dashboard" | "log" | "progress" | "tools";
 
 const TABS: TabDef<TabId>[] = [
   { id: "dashboard", label: "Dashboard" },
   { id: "log", label: "Log" },
-  { id: "templates", label: "History" },
   { id: "progress", label: "Progress" },
   { id: "tools", label: "Tools" },
 ];
@@ -24,13 +24,14 @@ export function AppShell({ userEmail }: { userEmail: string }) {
   const [active, setActive] = useState<TabId>("dashboard");
   const loaded = useStore((s) => s.loaded);
   const hydrate = useStore((s) => s.hydrate);
+  const draft = useStore((s) => s.draft);
   const [error, setError] = useState("");
+  const [showStart, setShowStart] = useState(false);
 
   useEffect(() => {
     hydrate().catch((e) => setError(e.message ?? String(e)));
   }, [hydrate]);
 
-  // Jump straight to logging when a workout becomes active from another tab.
   function go(tab: TabId) {
     setActive(tab);
   }
@@ -43,6 +44,13 @@ export function AppShell({ userEmail }: { userEmail: string }) {
         </h1>
         <span className="hidden text-xs text-ink-faint sm:block">{userEmail}</span>
       </header>
+
+      <button
+        onClick={draft ? () => go("log") : () => setShowStart(true)}
+        className="rounded-xl bg-ember py-3 text-center font-semibold text-night hover:bg-ember-soft"
+      >
+        {draft ? "Continue workout →" : "Start workout"}
+      </button>
 
       <TabBar tabs={TABS} active={active} onChange={setActive} />
 
@@ -59,14 +67,23 @@ export function AppShell({ userEmail }: { userEmail: string }) {
       ) : (
         <main className="flex-1">
           {active === "dashboard" && <Dashboard onStart={() => go("log")} />}
-          {active === "log" && <WorkoutLogger />}
-          {active === "templates" && <History onStart={() => go("log")} />}
+          {active === "log" && (draft ? <WorkoutLogger /> : <History />)}
           {active === "progress" && <Progress />}
           {active === "tools" && <Tools />}
         </main>
       )}
 
       <RestTimer />
+
+      {showStart && (
+        <StartModal
+          onClose={() => setShowStart(false)}
+          onStart={() => {
+            setShowStart(false);
+            go("log");
+          }}
+        />
+      )}
     </div>
   );
 }

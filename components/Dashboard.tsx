@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useStore } from "@/lib/store";
 import { computeStreaks, dailyTotals, localDay } from "@/lib/stats";
 import { StreakHeatmap } from "./StreakHeatmap";
@@ -49,11 +49,9 @@ export function Dashboard({ onStart }: { onStart: () => void }) {
   const exercises = useStore((s) => s.exercises);
   const profile = useStore((s) => s.profile);
   const unit = profile?.unit ?? "kg";
-  const startBlank = useStore((s) => s.startBlank);
   const startFromWorkout = useStore((s) => s.startFromWorkout);
   const startEdit = useStore((s) => s.startEdit);
   const draft = useStore((s) => s.draft);
-  const [picking, setPicking] = useState(false);
 
   const { current, longest, total, thisWeek } = useMemo(() => {
     const totals = dailyTotals(workouts);
@@ -110,22 +108,9 @@ export function Dashboard({ onStart }: { onStart: () => void }) {
       });
   }, [workouts, exercises]);
 
-  function handleStart() {
-    if (draft) { onStart(); return; }
-    if (recentWorkouts.length === 0) { startBlank(); onStart(); return; }
-    setPicking(true);
-  }
-
-  function pickEmpty() {
-    startBlank();
-    setPicking(false);
-    onStart();
-  }
-
   function repeatWorkout(w: (typeof recentWorkouts)[number]) {
     if (draft && !window.confirm("Replace the workout in progress?")) return;
     startFromWorkout(w);
-    setPicking(false);
     onStart();
   }
 
@@ -137,13 +122,6 @@ export function Dashboard({ onStart }: { onStart: () => void }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <button
-        onClick={handleStart}
-        className="rounded-xl bg-ember py-3 text-center font-semibold text-night hover:bg-ember-soft"
-      >
-        {draft ? "Resume workout" : "Start a workout"}
-      </button>
-
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Current streak" value={`${current}d`} accent />
         <Stat label="Longest streak" value={`${longest}d`} />
@@ -230,65 +208,6 @@ export function Dashboard({ onStart }: { onStart: () => void }) {
         )}
       </section>
 
-      {picking && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-3 sm:items-center">
-          <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-xl border border-line bg-surface shadow-2xl">
-            <div className="flex items-center justify-between border-b border-line p-4">
-              <h2 className="font-semibold">Start a workout</h2>
-              <button onClick={() => setPicking(false)} className="text-ink-faint hover:text-ink">
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3">
-              <button
-                onClick={pickEmpty}
-                className="mb-3 w-full rounded-lg border border-line py-3 text-center font-medium text-ink-soft hover:text-ink"
-              >
-                Empty workout
-              </button>
-
-              {recentWorkouts.length > 0 && (
-                <>
-                  <p className="mb-2 px-1 text-xs text-ink-faint">Repeat a previous workout</p>
-                  <ul className="flex flex-col gap-1.5">
-                    {recentWorkouts.map((w) => {
-                      const dur = fmtDuration(w.duration_seconds);
-                      return (
-                        <li key={w.id}>
-                          <button
-                            onClick={() => repeatWorkout(w)}
-                            className="w-full rounded-lg border border-line bg-night px-3 py-2.5 text-left hover:border-ember/50"
-                          >
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="font-medium text-ink">{w.name}</span>
-                              <span className="shrink-0 text-xs text-ink-faint">{fmtDate(w.performed_at)}</span>
-                            </div>
-                            <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-soft">
-                              <span>{w.workingSetCount} sets</span>
-                              {dur && (
-                                <>
-                                  <span className="text-ink-faint">·</span>
-                                  <span>{dur}</span>
-                                </>
-                              )}
-                            </div>
-                            {w.exerciseNames.length > 0 && (
-                              <p className="mt-1 truncate text-xs text-ink-faint">
-                                {w.exerciseNames.join(" · ")}
-                              </p>
-                            )}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
