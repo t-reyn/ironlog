@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "IronLog — Workout Tracker",
-  description: "Track lifts, templates, progress, and streaks.",
+  title: "IronLog",
+  description: "Track lifts, templates, and progress.",
+  appleWebApp: {
+    capable: true,
+    title: "IronLog",
+    statusBarStyle: "black",
+  },
 };
 
 export default function RootLayout({
