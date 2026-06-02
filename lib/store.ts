@@ -340,6 +340,7 @@ export const useStore = create<StoreState>((set, get) => ({
     } else {
       await db.saveWorkout({
         name: draft.name,
+        performed_at: new Date(draft.startedAt).toISOString(),
         duration_seconds: Math.round((Date.now() - draft.startedAt) / 1000),
         sets,
       });

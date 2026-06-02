@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { saveTemplate } from "@/lib/db";
 import { MUSCLE_COLORS } from "@/lib/muscles";
@@ -26,10 +26,23 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const [picking, setPicking] = useState(false);
   const [swappingIdx, setSwappingIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  // eslint-disable-next-line react-hooks/purity -- intentional: seeded once at mount, kept fresh by interval
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const unit = profile?.unit ?? "kg";
 
   if (!draft) return null;
+
+  const elapsedSec = Math.floor((now - draft.startedAt) / 1000);
+  const elapsedStr =
+    elapsedSec < 3600
+      ? `${Math.floor(elapsedSec / 60)}m ${String(elapsedSec % 60).padStart(2, "0")}s`
+      : `${Math.floor(elapsedSec / 3600)}h ${Math.floor((elapsedSec % 3600) / 60)}m`;
 
   const completedSets = draft.exercises.reduce(
     (n, ex) => n + ex.sets.filter((s) => s.done).length,
@@ -100,6 +113,9 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
           className="flex-1 bg-transparent text-lg font-medium text-ink outline-none"
           placeholder="Workout name"
         />
+        <span className="shrink-0 font-mono text-sm tabular-nums text-ink-soft">
+          {elapsedStr}
+        </span>
       </div>
 
       {/* Scrollable exercises */}
