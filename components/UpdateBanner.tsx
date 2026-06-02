@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function UpdateBanner() {
   const [waitingSW, setWaitingSW] = useState<ServiceWorker | null>(null);
+  // Only reload when the user explicitly tapped "Update" — not on first SW activation.
+  const userTriggered = useRef(false);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -23,7 +25,9 @@ export function UpdateBanner() {
       });
     });
 
-    const onControllerChange = () => window.location.reload();
+    const onControllerChange = () => {
+      if (userTriggered.current) window.location.reload();
+    };
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
     return () => navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
   }, []);
@@ -31,6 +35,7 @@ export function UpdateBanner() {
   if (!waitingSW) return null;
 
   function applyUpdate() {
+    userTriggered.current = true;
     waitingSW?.postMessage("skipWaiting");
   }
 
