@@ -10,6 +10,7 @@ import { Progress } from "./Progress";
 import { Tools } from "./Tools";
 import { RestTimer } from "./RestTimer";
 import { StartModal } from "./StartModal";
+import { UpdateBanner } from "./UpdateBanner";
 
 type TabId = "dashboard" | "log" | "progress" | "tools";
 
@@ -75,6 +76,7 @@ export function AppShell({ userEmail }: { userEmail: string }) {
       )}
 
       <RestTimer />
+      <UpdateBanner />
 
       {showStart && (
         <StartModal
