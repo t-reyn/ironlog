@@ -42,6 +42,7 @@ export function Tools() {
   const [reps, setReps] = useState(5);
 
   const [editingTpl, setEditingTpl] = useState<TemplateWithSets | null>(null);
+  const [tplsOpen, setTplsOpen] = useState(true);
   const [building, setBuilding] = useState(false);
   const [tplName, setTplName] = useState("New Template");
   const [tplExs, setTplExs] = useState<string[]>([]);
@@ -178,8 +179,22 @@ export function Tools() {
     <div className="flex flex-col gap-4">
       {/* Templates */}
       <section className="rounded-xl border border-line bg-surface/70 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-medium">Templates</h3>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setTplsOpen((v) => !v)}
+            className="flex items-center gap-2 font-medium"
+          >
+            <span
+              className="text-xs text-ink-faint transition-transform duration-150"
+              style={{ display: "inline-block", transform: tplsOpen ? "rotate(90deg)" : "rotate(0deg)" }}
+            >
+              ▶
+            </span>
+            Templates
+            {templates.length > 0 && (
+              <span className="text-sm font-normal text-ink-faint">{templates.length}</span>
+            )}
+          </button>
           <button
             onClick={() => setBuilding(true)}
             className="rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-night hover:bg-ember-soft"
@@ -188,11 +203,13 @@ export function Tools() {
           </button>
         </div>
 
-        {templates.length === 0 ? (
-          <p className="text-sm text-ink-faint">No templates yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {templates.map((t) => {
+        {tplsOpen && (
+          <div className="mt-3">
+            {templates.length === 0 ? (
+              <p className="text-sm text-ink-faint">No templates yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {templates.map((t) => {
               const ids = [...new Set(t.sets.map((s) => s.exercise_id))];
               return (
                 <li key={t.id} className="rounded-lg border border-line bg-night p-3">
@@ -215,29 +232,31 @@ export function Tools() {
                       </button>
                     </div>
                   </div>
-                  {ids.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {ids.map((id) => {
-                        const ex = exerciseById(id);
-                        const count = t.sets.filter((s) => s.exercise_id === id).length;
-                        return (
-                          <div key={id} className="flex items-center gap-1 text-xs text-ink-soft">
-                            <span style={{ color: MUSCLE_COLORS[ex?.muscle_group ?? "core"] }}>
-                              <ExerciseFigure pattern={ex?.movement_pattern ?? "other"} size={20} />
-                            </span>
-                            <span>
-                              {ex?.name ?? "?"}{" "}
-                              <span className="text-ink-faint">×{count}</span>
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                    {ids.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {ids.map((id) => {
+                          const ex = exerciseById(id);
+                          const count = t.sets.filter((s) => s.exercise_id === id).length;
+                          return (
+                            <div key={id} className="flex items-center gap-1 text-xs text-ink-soft">
+                              <span style={{ color: MUSCLE_COLORS[ex?.muscle_group ?? "core"] }}>
+                                <ExerciseFigure pattern={ex?.movement_pattern ?? "other"} size={20} />
+                              </span>
+                              <span>
+                                {ex?.name ?? "?"}{" "}
+                                <span className="text-ink-faint">×{count}</span>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          </div>
         )}
       </section>
 
