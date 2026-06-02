@@ -102,6 +102,7 @@ export interface DraftSet {
   reps: number;
   rpe?: number | null;
   is_warmup?: boolean;
+  unit?: string;
 }
 
 export async function saveWorkout(input: {
@@ -137,6 +138,7 @@ export async function saveWorkout(input: {
       rpe: s.rpe ?? null,
       is_warmup: s.is_warmup ?? false,
       completed: true,
+      unit: s.unit ?? "kg",
     }));
     const { error: e2 } = await supabase.from("workout_sets").insert(rows);
     if (e2) throw e2;
@@ -176,6 +178,7 @@ export async function updateWorkout(
       rpe: s.rpe ?? null,
       is_warmup: s.is_warmup ?? false,
       completed: true,
+      unit: s.unit ?? "kg",
     }));
     const { error: e3 } = await supabase.from("workout_sets").insert(rows);
     if (e3) throw e3;

@@ -18,6 +18,7 @@ export interface DraftSetEntry {
 
 export interface DraftExercise {
   exerciseId: string;
+  unit: "kg" | "lb";
   sets: DraftSetEntry[];
 }
 
@@ -62,6 +63,7 @@ interface StoreState {
   setDraftName: (name: string) => void;
   addDraftExercise: (exerciseId: string) => void;
   replaceDraftExercise: (exIdx: number, exerciseId: string) => void;
+  toggleDraftExerciseUnit: (exIdx: number) => void;
   removeDraftExercise: (exIdx: number) => void;
   addDraftSet: (exIdx: number) => void;
   updateDraftSet: (exIdx: number, setIdx: number, patch: Partial<DraftSetEntry>) => void;
@@ -125,6 +127,7 @@ export const useStore = create<StoreState>((set, get) => ({
     set({ draft: { name: "Workout", startedAt: Date.now(), exercises: [] } }),
 
   startFromTemplate: (t) => {
+    const defaultUnit = get().profile?.unit ?? "kg";
     const byExercise = new Map<string, DraftSetEntry[]>();
     const order: string[] = [];
     for (const s of [...t.sets].sort((a, b) => a.set_index - b.set_index)) {
@@ -145,6 +148,7 @@ export const useStore = create<StoreState>((set, get) => ({
         startedAt: Date.now(),
         exercises: order.map((exerciseId) => ({
           exerciseId,
+          unit: defaultUnit,
           sets: byExercise.get(exerciseId)!,
         })),
       },
@@ -152,14 +156,15 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   startFromWorkout: (w) => {
-    const byExercise = new Map<string, DraftSetEntry[]>();
+    const defaultUnit = get().profile?.unit ?? "kg";
+    const byExercise = new Map<string, { unit: "kg" | "lb"; sets: DraftSetEntry[] }>();
     const order: string[] = [];
     for (const s of [...w.sets].filter((s) => s.completed).sort((a, b) => a.set_index - b.set_index)) {
       if (!byExercise.has(s.exercise_id)) {
-        byExercise.set(s.exercise_id, []);
+        byExercise.set(s.exercise_id, { unit: s.unit ?? defaultUnit, sets: [] });
         order.push(s.exercise_id);
       }
-      byExercise.get(s.exercise_id)!.push({
+      byExercise.get(s.exercise_id)!.sets.push({
         weight: s.weight,
         reps: s.reps,
         done: false,
@@ -172,21 +177,23 @@ export const useStore = create<StoreState>((set, get) => ({
         startedAt: Date.now(),
         exercises: order.map((exerciseId) => ({
           exerciseId,
-          sets: byExercise.get(exerciseId)!,
+          unit: byExercise.get(exerciseId)!.unit,
+          sets: byExercise.get(exerciseId)!.sets,
         })),
       },
     });
   },
 
   startEdit: (w) => {
-    const byExercise = new Map<string, DraftSetEntry[]>();
+    const defaultUnit = get().profile?.unit ?? "kg";
+    const byExercise = new Map<string, { unit: "kg" | "lb"; sets: DraftSetEntry[] }>();
     const order: string[] = [];
     for (const s of [...w.sets].sort((a, b) => a.set_index - b.set_index)) {
       if (!byExercise.has(s.exercise_id)) {
-        byExercise.set(s.exercise_id, []);
+        byExercise.set(s.exercise_id, { unit: s.unit ?? defaultUnit, sets: [] });
         order.push(s.exercise_id);
       }
-      byExercise.get(s.exercise_id)!.push({
+      byExercise.get(s.exercise_id)!.sets.push({
         weight: s.weight,
         reps: s.reps,
         done: s.completed,
@@ -200,7 +207,8 @@ export const useStore = create<StoreState>((set, get) => ({
         workoutId: w.id,
         exercises: order.map((exerciseId) => ({
           exerciseId,
-          sets: byExercise.get(exerciseId)!,
+          unit: byExercise.get(exerciseId)!.unit,
+          sets: byExercise.get(exerciseId)!.sets,
         })),
       },
     });
@@ -214,13 +222,27 @@ export const useStore = create<StoreState>((set, get) => ({
   addDraftExercise: (exerciseId) => {
     const draft = get().draft;
     if (!draft) return;
+    const unit = get().profile?.unit ?? "kg";
     set({
       draft: {
         ...draft,
         exercises: [
           ...draft.exercises,
-          { exerciseId, sets: [{ weight: 0, reps: 0, done: false, isWarmup: false }] },
+          { exerciseId, unit, sets: [{ weight: 0, reps: 0, done: false, isWarmup: false }] },
         ],
+      },
+    });
+  },
+
+  toggleDraftExerciseUnit: (exIdx) => {
+    const draft = get().draft;
+    if (!draft) return;
+    set({
+      draft: {
+        ...draft,
+        exercises: draft.exercises.map((ex, i) =>
+          i === exIdx ? { ...ex, unit: ex.unit === "kg" ? "lb" : "kg" } : ex,
+        ),
       },
     });
   },
@@ -309,6 +331,7 @@ export const useStore = create<StoreState>((set, get) => ({
           weight: s.weight,
           reps: s.reps,
           is_warmup: s.isWarmup,
+          unit: ex.unit,
         });
       });
     }
