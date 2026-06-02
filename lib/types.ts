@@ -95,3 +95,18 @@ export const ALL_MUSCLE_GROUPS: MuscleGroup[] = [
   "arms",
   "core",
 ];
+
+export const ALL_MOVEMENT_PATTERNS: MovementPattern[] = [
+  "squat",
+  "hinge",
+  "lunge",
+  "horizontal_press",
+  "vertical_press",
+  "horizontal_pull",
+  "vertical_pull",
+  "curl",
+  "triceps_extension",
+  "core",
+  "calf",
+  "other",
+];
