@@ -222,3 +222,24 @@ on conflict (name) where user_id is null do update
   set muscle_group = excluded.muscle_group,
       movement_pattern = excluded.movement_pattern,
       equipment = excluded.equipment;
+
+-- ---------------------------------------------------------------------------
+-- feedback — user suggestions (exercises, features). Dev reads via service role.
+-- ---------------------------------------------------------------------------
+create table if not exists feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users (id) on delete set null,
+  message text not null,
+  custom_exercises jsonb,
+  created_at timestamptz not null default now()
+);
+alter table feedback enable row level security;
+do $$
+begin
+  drop policy if exists feedback_insert on feedback;
+  create policy feedback_insert on feedback for insert
+    with check (user_id = auth.uid ());
+  drop policy if exists feedback_select on feedback;
+  create policy feedback_select on feedback for select
+    using (user_id = auth.uid ());
+end $$;

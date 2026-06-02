@@ -67,6 +67,24 @@ export async function createCustomExercise(
   return data as Exercise;
 }
 
+export async function deleteCustomExercise(id: string): Promise<void> {
+  const { error } = await supabase.from("exercises").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function submitFeedback(
+  message: string,
+  customExercises: Pick<Exercise, "name" | "muscle_group" | "movement_pattern" | "equipment">[],
+): Promise<void> {
+  const user_id = await uid();
+  const { error } = await supabase.from("feedback").insert({
+    user_id,
+    message: message.trim(),
+    custom_exercises: customExercises.length > 0 ? customExercises : null,
+  });
+  if (error) throw error;
+}
+
 // --- Workouts --------------------------------------------------------------
 export interface DraftSet {
   exercise_id: string;
