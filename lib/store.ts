@@ -358,12 +358,13 @@ export const useStore = create<StoreState>((set, get) => ({
   exerciseById: (id) => get().exercises.find((e) => e.id === id),
 }));
 
-// Persist draft across app close/reopen
+// Persist new-workout drafts across app close/reopen.
+// Edit drafts (workoutId present) are never persisted — they are ephemeral.
 if (typeof window !== "undefined") {
   useStore.subscribe((state, prev) => {
     if (state.draft === prev.draft) return;
     try {
-      if (state.draft) {
+      if (state.draft && !state.draft.workoutId) {
         localStorage.setItem("ironlog-draft", JSON.stringify(state.draft));
       } else {
         localStorage.removeItem("ironlog-draft");
