@@ -97,6 +97,13 @@ export const useStore = create<StoreState>((set, get) => ({
         db.listTemplates(),
         db.listBodyweight(),
       ]);
+
+    let savedDraft: Draft | null = null;
+    try {
+      const raw = localStorage.getItem("ironlog-draft");
+      if (raw) savedDraft = JSON.parse(raw) as Draft;
+    } catch {}
+
     set({
       profile,
       exercises,
@@ -105,6 +112,7 @@ export const useStore = create<StoreState>((set, get) => ({
       bodyweight,
       rest: { endsAt: null, duration: profile.default_rest_seconds },
       loaded: true,
+      ...(savedDraft ? { draft: savedDraft } : {}),
     });
   },
 
@@ -325,3 +333,17 @@ export const useStore = create<StoreState>((set, get) => ({
     get().exercises.find((e) => e.id === exerciseId)?.muscle_group,
   exerciseById: (id) => get().exercises.find((e) => e.id === id),
 }));
+
+// Persist draft across app close/reopen
+if (typeof window !== "undefined") {
+  useStore.subscribe((state, prev) => {
+    if (state.draft === prev.draft) return;
+    try {
+      if (state.draft) {
+        localStorage.setItem("ironlog-draft", JSON.stringify(state.draft));
+      } else {
+        localStorage.removeItem("ironlog-draft");
+      }
+    } catch {}
+  });
+}

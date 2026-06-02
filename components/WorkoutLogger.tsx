@@ -6,6 +6,7 @@ import { saveTemplate } from "@/lib/db";
 import { MUSCLE_COLORS } from "@/lib/muscles";
 import { ExerciseFigure } from "./ExerciseFigure";
 import { ExercisePicker } from "./ExercisePicker";
+import { RestTimer } from "./RestTimer";
 import { SetRow } from "./SetRow";
 
 export function WorkoutLogger({ onClose }: { onClose: () => void }) {
@@ -152,6 +153,8 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
+
+      <RestTimer />
 
       {/* Bottom action bar */}
       <div className="shrink-0 border-t border-line p-4">
