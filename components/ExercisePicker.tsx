@@ -59,7 +59,7 @@ export function ExercisePicker({
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-3 sm:items-center">
-      <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-xl border border-line bg-surface shadow-2xl">
+      <div className="flex max-h-[80dvh] w-full max-w-md flex-col rounded-xl border border-line bg-surface shadow-2xl">
         <div className="flex items-center gap-2 border-b border-line p-3">
           <input
             autoFocus
