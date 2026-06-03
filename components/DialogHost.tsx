@@ -93,8 +93,8 @@ function ConfirmButton({
       className={[
         "rounded-lg px-4 py-2 text-sm font-semibold",
         danger
-          ? "bg-danger text-night hover:bg-danger-soft"
-          : "bg-ember text-night hover:bg-ember-soft",
+          ? "bg-danger text-on-accent hover:bg-danger-soft"
+          : "bg-ember text-on-accent hover:bg-ember-soft",
       ].join(" ")}
     >
       {label}
@@ -148,7 +148,7 @@ function PromptBody({
         <button
           type="submit"
           disabled={!value.trim()}
-          className="rounded-lg bg-ember px-4 py-2 text-sm font-semibold text-night hover:bg-ember-soft disabled:opacity-50"
+          className="rounded-lg bg-ember px-4 py-2 text-sm font-semibold text-on-accent hover:bg-ember-soft disabled:opacity-50"
         >
           {confirmLabel}
         </button>

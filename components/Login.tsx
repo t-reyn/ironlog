@@ -51,10 +51,10 @@ export function Login() {
   return (
     <div className="mx-auto flex max-w-sm flex-1 flex-col justify-center gap-6 p-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Iron<span className="text-ember">Log</span>
+        <h1 className="text-4xl font-extrabold tracking-[-0.03em]">
+          REP<span className="text-amber">PA</span>
         </h1>
-        <p className="mt-1 text-ink-soft">Track lifts, progress, and streaks.</p>
+        <p className="mt-1 text-ink-soft">Log lifts, progress, and streaks.</p>
       </div>
 
       <form onSubmit={submit} className="flex flex-col gap-3">
@@ -96,7 +96,7 @@ export function Login() {
         <button
           type="submit"
           disabled={status === "busy"}
-          className="rounded-lg bg-ember px-4 py-2 font-medium text-night transition hover:bg-ember-soft disabled:opacity-60"
+          className="rounded-lg bg-ember px-4 py-2 font-medium text-on-accent transition hover:bg-ember-soft disabled:opacity-60"
         >
           {status === "busy"
             ? mode === "signin" ? "Signing in…" : "Creating account…"

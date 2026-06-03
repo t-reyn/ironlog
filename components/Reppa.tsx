@@ -1,0 +1,212 @@
+import type { CSSProperties, ReactNode } from "react";
+
+/* REPPA shared primitives — ported from the design handoff (reppa-ui.jsx). */
+
+type IconName =
+  | "home"
+  | "history"
+  | "progress"
+  | "profile"
+  | "plus"
+  | "play"
+  | "dumbbell"
+  | "flame"
+  | "check"
+  | "chevron"
+  | "clock"
+  | "timer"
+  | "bolt"
+  | "edit"
+  | "filter"
+  | "bell"
+  | "target"
+  | "arrowUp"
+  | "sun"
+  | "moon"
+  | "trash";
+
+export function Icon({
+  name,
+  size = 22,
+  color = "currentColor",
+  sw = 1.9,
+  style,
+}: {
+  name: IconName;
+  size?: number;
+  color?: string;
+  sw?: number;
+  style?: CSSProperties;
+}) {
+  const p = {
+    fill: "none",
+    stroke: color,
+    strokeWidth: sw,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  const paths: Record<IconName, ReactNode> = {
+    home: (
+      <>
+        <path d="M3 10.5 12 3l9 7.5" {...p} />
+        <path d="M5.5 9.5V20h13V9.5" {...p} />
+      </>
+    ),
+    history: (
+      <>
+        <circle cx="12" cy="12" r="8.5" {...p} />
+        <path d="M12 7.5V12l3 2" {...p} />
+      </>
+    ),
+    progress: (
+      <>
+        <path d="M4 19.5h16" {...p} />
+        <rect x="5.5" y="12" width="3.6" height="6.2" rx="1" {...p} />
+        <rect x="10.2" y="8" width="3.6" height="10.2" rx="1" {...p} />
+        <rect x="14.9" y="4.5" width="3.6" height="13.7" rx="1" {...p} />
+      </>
+    ),
+    profile: (
+      <>
+        <circle cx="12" cy="8.5" r="3.6" {...p} />
+        <path d="M5.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" {...p} />
+      </>
+    ),
+    plus: <path d="M12 5v14M5 12h14" {...p} />,
+    play: <path d="M8 5.5 18 12 8 18.5z" fill={color} stroke={color} strokeWidth={sw} strokeLinejoin="round" />,
+    dumbbell: (
+      <>
+        <path d="M3 12h18" {...p} />
+        <rect x="3.2" y="8.5" width="3" height="7" rx="1" fill={color} stroke="none" />
+        <rect x="17.8" y="8.5" width="3" height="7" rx="1" fill={color} stroke="none" />
+        <rect x="6.6" y="6.5" width="2.6" height="11" rx="1" fill={color} stroke="none" />
+        <rect x="14.8" y="6.5" width="2.6" height="11" rx="1" fill={color} stroke="none" />
+      </>
+    ),
+    flame: <path d="M12 3c.6 3-1.8 4.2-1.8 6.6 0 1 .6 1.9 1.4 2.3-.2-1.3.5-2.4 1.2-3 .2 2 2.2 2.8 2.2 5.3A5 5 0 0 1 12 21a5 5 0 0 1-5-5c0-4.2 3.6-5.4 5-13z" {...p} />,
+    check: <path d="M5 12.5 10 17l9-10" {...p} />,
+    chevron: <path d="M9 5l7 7-7 7" {...p} />,
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="8.5" {...p} />
+        <path d="M12 7.5V12l3 2" {...p} />
+      </>
+    ),
+    timer: (
+      <>
+        <circle cx="12" cy="13" r="7.5" {...p} />
+        <path d="M12 13V9M9.5 2.5h5" {...p} />
+      </>
+    ),
+    bolt: <path d="M13 3 5 13.5h6L10 21l9-11h-6z" {...p} />,
+    edit: <path d="M14 5l5 5M4 20l1-4L16 5l3 3L8 19z" {...p} />,
+    filter: <path d="M4 6h16M7 12h10M10 18h4" {...p} />,
+    bell: (
+      <>
+        <path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" {...p} />
+        <path d="M10 19a2 2 0 0 0 4 0" {...p} />
+      </>
+    ),
+    target: (
+      <>
+        <circle cx="12" cy="12" r="8" {...p} />
+        <circle cx="12" cy="12" r="3.4" {...p} />
+      </>
+    ),
+    arrowUp: <path d="M12 19V5M6 11l6-6 6 6" {...p} />,
+    sun: (
+      <>
+        <circle cx="12" cy="12" r="4" {...p} />
+        <path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19" {...p} />
+      </>
+    ),
+    moon: <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" {...p} />,
+    trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" {...p} />,
+  };
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={style} aria-hidden="true">
+      {paths[name]}
+    </svg>
+  );
+}
+
+export function Eyebrow({ children, className = "", style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
+  return (
+    <div className={`rp-eyebrow ${className}`} style={style}>
+      {children}
+    </div>
+  );
+}
+
+/** mono pill/badge — amber or green tinted */
+export function Pill({
+  tone = "green",
+  children,
+  className = "",
+  style,
+}: {
+  tone?: "amber" | "green";
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const tones =
+    tone === "amber"
+      ? "bg-amber-soft text-amber-ink"
+      : "bg-green-soft text-green-ink";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide ${tones} ${className}`}
+      style={style}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** up/down trend chip — green up, muted down */
+export function Delta({ value, up = true }: { value: string; up?: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold ${
+        up ? "bg-green-soft text-green-ink" : "bg-surface-2 text-ink-soft"
+      }`}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" style={{ transform: up ? "none" : "rotate(180deg)" }}>
+        <path d="M12 19V6M6 12l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      {value}
+    </span>
+  );
+}
+
+export interface WeekDay {
+  l: string;
+  done?: boolean;
+  today?: boolean;
+  label: string;
+}
+
+export function WeekStrip({ days }: { days: WeekDay[] }) {
+  return (
+    <div className="flex gap-1">
+      {days.map((d, i) => (
+        <div key={i} className="flex flex-1 flex-col items-center gap-2">
+          <div className="text-[11px] font-semibold text-ink-faint">{d.l}</div>
+          <div
+            className={[
+              "flex h-[30px] w-[30px] items-center justify-center rounded-[11px] text-xs font-bold",
+              d.done
+                ? "border border-green bg-green text-on-green"
+                : d.today
+                  ? "border-2 border-amber bg-transparent text-ink"
+                  : "border border-line bg-surface-2 text-ink-faint",
+            ].join(" ")}
+          >
+            {d.done ? <Icon name="check" size={15} color="var(--color-on-green)" sw={2.6} /> : d.label}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

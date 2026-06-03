@@ -100,7 +100,7 @@ export function TemplateBuilder({
             <button
               onClick={saveNewTemplate}
               disabled={savingTpl || tplExs.length === 0 || !tplName.trim()}
-              className="w-full rounded-lg bg-ember py-2.5 font-medium text-night hover:bg-ember-soft disabled:opacity-50"
+              className="w-full rounded-lg bg-ember py-2.5 font-medium text-on-accent hover:bg-ember-soft disabled:opacity-50"
             >
               {savingTpl ? "Saving…" : "Save template"}
             </button>

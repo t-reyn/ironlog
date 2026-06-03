@@ -20,6 +20,8 @@ import { MUSCLE_COLORS } from "@/lib/muscles";
 import { ExerciseFigure } from "./ExerciseFigure";
 import { TemplateBuilder } from "./TemplateBuilder";
 import { TemplateEditor } from "./TemplateEditor";
+import { Icon } from "./Reppa";
+import { useThemePref, setThemePref, type ThemePref } from "@/lib/theme";
 import {
   ALL_MOVEMENT_PATTERNS,
   ALL_MUSCLE_GROUPS,
@@ -28,7 +30,8 @@ import {
   type Unit,
 } from "@/lib/types";
 
-export function Tools() {
+export function Tools({ userEmail }: { userEmail: string }) {
+  const theme = useThemePref();
   const workouts = useStore((s) => s.workouts);
   const exercises = useStore((s) => s.exercises);
   const profile = useStore((s) => s.profile);
@@ -165,7 +168,7 @@ export function Tools() {
 
   function exportCsv() {
     const csv = exportWorkoutsToCsv(workouts, exercises);
-    downloadCsv(`ironlog-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    downloadCsv(`reppa-${new Date().toISOString().slice(0, 10)}.csv`, csv);
     toast.success(`Exported ${workouts.length} workout${workouts.length !== 1 ? "s" : ""} to CSV.`);
   }
 
@@ -190,10 +193,47 @@ export function Tools() {
     }
   }
 
+  const initials = (userEmail.split("@")[0] || "U").slice(0, 2).toUpperCase();
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Profile header */}
+      <div className="flex items-center gap-3.5">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green text-base font-extrabold text-on-green">
+          {initials}
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-extrabold leading-none tracking-[-0.025em]">Profile</h1>
+          <div className="mt-1 truncate font-mono text-xs text-ink-faint">{userEmail}</div>
+        </div>
+      </div>
+
+      {/* Appearance */}
+      <section className="rounded-[28px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
+        <h3 className="mb-3 font-bold tracking-[-0.015em]">Appearance</h3>
+        <div className="flex items-center justify-between py-1">
+          <span className="text-ink-soft">Theme</span>
+          <div className="flex gap-1 rounded-full border border-line p-1">
+            {(["system", "light", "dark"] as ThemePref[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setThemePref(t)}
+                className={[
+                  "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold capitalize transition-colors",
+                  theme === t ? "bg-ink text-bg" : "text-ink-soft hover:text-ink",
+                ].join(" ")}
+              >
+                {t === "light" && <Icon name="sun" size={14} color="currentColor" />}
+                {t === "dark" && <Icon name="moon" size={14} color="currentColor" />}
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Templates */}
-      <section className="rounded-xl border border-line bg-surface/70 p-4">
+      <section className="rounded-[28px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
         <div className="flex items-center justify-between">
           <button
             onClick={() => setTplsOpen((v) => !v)}
@@ -212,7 +252,7 @@ export function Tools() {
           </button>
           <button
             onClick={() => setBuilding(true)}
-            className="rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-night hover:bg-ember-soft"
+            className="rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-ember-soft"
           >
             + New
           </button>
@@ -277,7 +317,7 @@ export function Tools() {
       </section>
 
       {/* 1RM calculator */}
-      <section className="rounded-xl border border-line bg-surface/70 p-4">
+      <section className="rounded-[28px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
         <h3 className="mb-3 font-medium">
           One-rep max estimator{" "}
           <span className="font-normal text-ink-faint">(Epley)</span>
@@ -313,7 +353,7 @@ export function Tools() {
       </section>
 
       {/* Preferences */}
-      <section className="rounded-xl border border-line bg-surface/70 p-4">
+      <section className="rounded-[28px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
         <h3 className="mb-3 font-medium">Preferences</h3>
         <div className="flex items-center justify-between py-2">
           <span className="text-ink-soft">Units</span>
@@ -324,7 +364,7 @@ export function Tools() {
                 onClick={() => setUnit(u)}
                 className={[
                   "rounded-md px-3 py-1 text-sm",
-                  unit === u ? "bg-ember text-night" : "text-ink-soft hover:text-ink",
+                  unit === u ? "bg-ember text-on-accent" : "text-ink-soft hover:text-ink",
                 ].join(" ")}
               >
                 {u}
@@ -341,7 +381,7 @@ export function Tools() {
                 onClick={() => setRest(s)}
                 className={[
                   "rounded-md px-2.5 py-1 text-sm",
-                  rest === s ? "bg-ember text-night" : "text-ink-soft hover:text-ink",
+                  rest === s ? "bg-ember text-on-accent" : "text-ink-soft hover:text-ink",
                 ].join(" ")}
               >
                 {s}s
@@ -352,7 +392,7 @@ export function Tools() {
       </section>
 
       {/* Data */}
-      <section className="rounded-xl border border-line bg-surface/70 p-4">
+      <section className="rounded-[28px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
         <h3 className="mb-3 font-medium">Data</h3>
         <button
           onClick={exportCsv}
@@ -364,7 +404,7 @@ export function Tools() {
       </section>
 
       {/* Account */}
-      <section className="rounded-xl border border-line bg-surface/70 p-4">
+      <section className="rounded-[28px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
         <h3 className="mb-3 font-medium">Account</h3>
         <ChangePassword />
         <div className="mt-3 border-t border-line pt-3">
@@ -378,7 +418,7 @@ export function Tools() {
       </section>
 
       {/* Custom exercises */}
-      <section className="rounded-xl border border-line bg-surface/70 p-4">
+      <section className="rounded-[28px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
             <h3 className="font-medium">Custom exercises</h3>
@@ -388,7 +428,7 @@ export function Tools() {
           </div>
           <button
             onClick={() => setShowCustomForm((v) => !v)}
-            className="shrink-0 rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-night hover:bg-ember-soft"
+            className="shrink-0 rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-ember-soft"
           >
             + New
           </button>
@@ -435,7 +475,7 @@ export function Tools() {
               <button
                 onClick={saveCustomExercise}
                 disabled={savingCustom || !customName.trim()}
-                className="flex-1 rounded-lg bg-ember py-2 text-sm font-medium text-night hover:bg-ember-soft disabled:opacity-50"
+                className="flex-1 rounded-lg bg-ember py-2 text-sm font-medium text-on-accent hover:bg-ember-soft disabled:opacity-50"
               >
                 {savingCustom ? "Saving…" : "Save exercise"}
               </button>
@@ -485,7 +525,7 @@ export function Tools() {
       </section>
 
       {/* Feedback */}
-      <section className="rounded-xl border border-line bg-surface/70 p-4">
+      <section className="rounded-[28px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
         <h3 className="mb-1 font-medium">Feedback</h3>
         <p className="mb-3 text-xs text-ink-faint">
           Suggest exercises or features — your input shapes the app.
@@ -516,7 +556,7 @@ export function Tools() {
           <button
             onClick={sendFeedback}
             disabled={feedbackStatus === "busy" || !feedbackMsg.trim()}
-            className="w-full rounded-lg bg-ember py-2.5 text-sm font-medium text-night hover:bg-ember-soft disabled:opacity-50"
+            className="w-full rounded-lg bg-ember py-2.5 text-sm font-medium text-on-accent hover:bg-ember-soft disabled:opacity-50"
           >
             {feedbackStatus === "busy" ? "Sending…" : "Send feedback"}
           </button>
@@ -595,7 +635,7 @@ function ChangePassword() {
         <button
           type="submit"
           disabled={status === "busy"}
-          className="flex-1 rounded-lg bg-ember py-2 text-sm font-medium text-night hover:bg-ember-soft disabled:opacity-60"
+          className="flex-1 rounded-lg bg-ember py-2 text-sm font-medium text-on-accent hover:bg-ember-soft disabled:opacity-60"
         >
           {status === "busy" ? "Saving…" : status === "done" ? "Saved ✓" : "Save password"}
         </button>

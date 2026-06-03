@@ -86,7 +86,7 @@ export function RestTimer({ bottomOffset }: { bottomOffset?: string } = {}) {
           </button>
           <button
             onClick={stopRest}
-            className="rounded-md bg-ember px-3 py-1 text-sm font-medium text-night"
+            className="rounded-md bg-ember px-3 py-1 text-sm font-medium text-on-accent"
           >
             Skip
           </button>

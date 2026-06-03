@@ -2,13 +2,13 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "IronLog",
-    short_name: "IronLog",
-    description: "Track lifts, templates, and progress.",
+    name: "REPPA",
+    short_name: "REPPA",
+    description: "Log lifts, templates, and progress.",
     start_url: "/",
     display: "standalone",
-    background_color: "#0f1115",
-    theme_color: "#0f1115",
+    background_color: "#faf3e3",
+    theme_color: "#1a4d2e",
     orientation: "portrait",
     icons: [
       { src: "/icon", sizes: "192x192", type: "image/png" },

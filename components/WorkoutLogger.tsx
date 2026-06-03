@@ -9,6 +9,7 @@ import { toast } from "@/lib/toast";
 import { ExerciseFigure } from "./ExerciseFigure";
 import { ExercisePicker } from "./ExercisePicker";
 import { SetRow } from "./SetRow";
+import { Icon } from "./Reppa";
 
 export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const draft = useStore((s) => s.draft);
@@ -139,22 +140,22 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-night">
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3">
+      <div className="flex shrink-0 items-center gap-3 border-b border-line-2 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <button
           onClick={onClose}
           aria-label="Close workout"
-          className="-ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xl text-ink-soft hover:bg-surface-2 hover:text-ink"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-ink-soft hover:text-ink"
         >
-          ←
+          <Icon name="chevron" size={18} color="currentColor" style={{ transform: "rotate(90deg)" }} />
         </button>
         <input
           value={draft.name}
           onChange={(e) => setName(e.target.value)}
           aria-label="Workout name"
-          className="flex-1 bg-transparent text-lg font-medium text-ink outline-none"
+          className="flex-1 bg-transparent text-lg font-bold tracking-[-0.015em] text-ink outline-none"
           placeholder="Workout name"
         />
-        <span className="shrink-0 font-mono text-sm tabular-nums text-ink-soft">
+        <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-amber">
           {elapsedStr}
         </span>
       </div>
@@ -168,7 +169,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
             return (
               <div
                 key={`${ex.exerciseId}-${exIdx}`}
-                className="rounded-xl border border-line bg-surface/70 p-3"
+                className="rounded-[24px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]"
               >
                 <div className="mb-2 flex items-center gap-3">
                   <span style={{ color: MUSCLE_COLORS[meta?.muscle_group ?? "core"] }}>
@@ -176,7 +177,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
                   </span>
                   <button
                     onClick={() => setSwappingIdx(exIdx)}
-                    className="flex-1 text-left font-medium text-ink hover:text-ember"
+                    className="flex-1 text-left text-lg font-bold tracking-[-0.015em] text-ink hover:text-green-ink"
                     title="Change exercise"
                   >
                     {meta?.name ?? "Exercise"}
@@ -214,9 +215,10 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
 
                 <button
                   onClick={() => addSet(exIdx)}
-                  className="mt-2 w-full rounded-lg border border-dashed border-line py-1.5 text-sm text-ink-soft hover:text-ink"
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 border-t border-line-2 pt-3 text-sm font-semibold text-green-ink"
                 >
-                  + Add set
+                  <Icon name="plus" size={16} color="currentColor" sw={2.2} />
+                  Add set
                 </button>
               </div>
             );
@@ -224,20 +226,24 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
 
           <button
             onClick={() => setPicking(true)}
-            className="rounded-lg border border-line bg-surface py-2.5 font-medium text-ink-soft hover:text-ink"
+            className="flex items-center justify-center gap-1.5 rounded-full border border-line bg-surface py-3 font-semibold text-ink-soft hover:text-ink"
           >
-            + Add exercise
+            <Icon name="plus" size={17} color="currentColor" sw={2.2} />
+            Add exercise
           </button>
         </div>
       </div>
 
       {/* Bottom action bar */}
-      <div className="shrink-0 border-t border-line p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div
+        className="shrink-0 border-t border-line-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+        style={{ background: "color-mix(in srgb, var(--color-bg) 86%, transparent)", backdropFilter: "blur(16px)" }}
+      >
         <div className="mx-auto flex max-w-3xl gap-2">
           <button
             onClick={onFinish}
             disabled={saving}
-            className="flex-1 rounded-lg bg-ember py-2.5 font-medium text-night hover:bg-ember-soft disabled:opacity-60"
+            className="flex-1 rounded-full bg-green py-3 font-bold text-on-green hover:opacity-95 disabled:opacity-60"
           >
             {saving
               ? "Saving…"
@@ -249,14 +255,14 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
             <button
               onClick={saveAsTemplate}
               disabled={saving || draft.exercises.length === 0}
-              className="rounded-lg border border-line px-3 py-2.5 text-sm text-ink-soft hover:text-ink disabled:opacity-50"
+              className="rounded-full border border-line bg-surface-2 px-3 py-3 text-sm text-ink-soft hover:text-ink disabled:opacity-50"
             >
-              Save as template
+              Template
             </button>
           )}
           <button
             onClick={onDiscard}
-            className="rounded-lg border border-line px-3 py-2.5 text-sm text-ink-faint hover:border-danger/50 hover:text-danger-soft"
+            className="rounded-full border border-line px-3 py-3 text-sm text-ink-faint hover:border-danger/50 hover:text-danger-soft"
           >
             Discard
           </button>

@@ -1,15 +1,33 @@
 import type { Metadata } from "next";
+import { Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
+const hanken = Hanken_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-hanken",
+  display: "swap",
+});
+
+const jetbrains = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-jetbrains",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "IronLog",
-  description: "Track lifts, templates, and progress.",
+  title: "REPPA",
+  description: "Log lifts, templates, and progress.",
   appleWebApp: {
     capable: true,
-    title: "IronLog",
-    statusBarStyle: "black",
+    title: "REPPA",
+    statusBarStyle: "black-translucent",
   },
 };
+
+// Apply the saved theme before paint to avoid a light/dark flash.
+const themeScript = `(function(){try{var t=localStorage.getItem('reppa-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -17,7 +35,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className={`h-full antialiased ${hanken.variable} ${jetbrains.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

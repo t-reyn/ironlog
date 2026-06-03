@@ -110,7 +110,7 @@ export function ExercisePicker({
             <button
               onClick={create}
               disabled={busy}
-              className="flex-1 rounded-lg bg-ember px-3 py-2 font-medium text-night disabled:opacity-60"
+              className="flex-1 rounded-lg bg-ember px-3 py-2 font-medium text-on-accent disabled:opacity-60"
             >
               Add & use
             </button>

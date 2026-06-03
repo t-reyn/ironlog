@@ -1,20 +1,30 @@
 "use client";
 
 import { useRef, type ReactNode } from "react";
+import { Icon } from "./Reppa";
 
 export interface TabDef<T extends string> {
   id: T;
   label: string;
   icon: ReactNode;
+  /** optional distinct icon shown when the tab is active */
+  iconActive?: ReactNode;
 }
 
 interface Props<T extends string> {
   tabs: TabDef<T>[];
   active: T;
   onChange: (id: T) => void;
+  onFab: () => void;
+  /** true while a workout draft is in progress — FAB reads "continue" */
+  fabActive?: boolean;
 }
 
-export function TabBar<T extends string>({ tabs, active, onChange }: Props<T>) {
+/**
+ * REPPA bottom bar: four tabs split around a raised amber + FAB.
+ * Layout: [tab tab] (FAB) [tab tab].
+ */
+export function TabBar<T extends string>({ tabs, active, onChange, onFab, fabActive }: Props<T>) {
   const listRef = useRef<HTMLDivElement>(null);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
@@ -32,36 +42,50 @@ export function TabBar<T extends string>({ tabs, active, onChange }: Props<T>) {
       ?.[next]?.focus();
   }
 
+  const renderTab = (t: TabDef<T>) => {
+    const isActive = t.id === active;
+    return (
+      <button
+        key={t.id}
+        role="tab"
+        aria-selected={isActive}
+        tabIndex={isActive ? 0 : -1}
+        onClick={() => onChange(t.id)}
+        className={[
+          "flex flex-1 flex-col items-center gap-1 rounded-lg py-1 text-[10px] font-semibold transition-colors",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-green-ink",
+          isActive ? "text-green-ink" : "text-ink-faint hover:text-ink-soft",
+        ].join(" ")}
+      >
+        <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center">
+          {isActive && t.iconActive ? t.iconActive : t.icon}
+        </span>
+        {t.label}
+      </button>
+    );
+  };
+
   return (
     <div
       ref={listRef}
       role="tablist"
       aria-label="Sections"
       onKeyDown={handleKeyDown}
-      className="flex w-full items-stretch gap-1"
+      className="flex w-full items-start justify-around gap-1"
     >
-      {tabs.map((t) => {
-        const isActive = t.id === active;
-        return (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={isActive}
-            tabIndex={isActive ? 0 : -1}
-            onClick={() => onChange(t.id)}
-            className={[
-              "flex flex-1 flex-col items-center gap-1 rounded-lg px-2 py-2 text-[11px] font-medium transition-colors",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-ember",
-              isActive ? "text-ember" : "text-ink-faint hover:text-ink-soft",
-            ].join(" ")}
-          >
-            <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center">
-              {t.icon}
-            </span>
-            {t.label}
-          </button>
-        );
-      })}
+      {tabs.slice(0, 2).map(renderTab)}
+
+      <div className="flex flex-1 justify-center">
+        <button
+          onClick={onFab}
+          aria-label={fabActive ? "Continue workout" : "Start workout"}
+          className="-mt-1.5 flex h-[52px] w-[52px] items-center justify-center rounded-[18px] bg-amber text-on-amber shadow-[0_6px_16px_rgba(255,159,41,0.45)] transition-transform active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-ink"
+        >
+          <Icon name={fabActive ? "play" : "plus"} size={fabActive ? 22 : 26} color="var(--color-on-amber)" sw={2.4} />
+        </button>
+      </div>
+
+      {tabs.slice(2).map(renderTab)}
     </div>
   );
 }

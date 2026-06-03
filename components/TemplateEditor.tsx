@@ -187,7 +187,7 @@ export function TemplateEditor({
             <button
               onClick={save}
               disabled={saving || exs.length === 0 || !name.trim()}
-              className="w-full rounded-lg bg-ember py-2.5 font-medium text-night hover:bg-ember-soft disabled:opacity-50"
+              className="w-full rounded-lg bg-ember py-2.5 font-medium text-on-accent hover:bg-ember-soft disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save changes"}
             </button>

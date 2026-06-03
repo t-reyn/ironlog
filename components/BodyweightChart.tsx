@@ -71,7 +71,7 @@ export function BodyweightChart() {
           <button
             onClick={add}
             disabled={busy}
-            className="rounded-md bg-ember px-3 py-1 text-sm font-medium text-night disabled:opacity-60"
+            className="rounded-md bg-ember px-3 py-1 text-sm font-medium text-on-accent disabled:opacity-60"
           >
             Log
           </button>

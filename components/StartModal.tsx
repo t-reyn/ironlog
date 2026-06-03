@@ -206,7 +206,7 @@ export function StartModal({ onClose, onStart }: { onClose: () => void; onStart:
                               </button>
                               <button
                                 onClick={() => doStart(() => startFromTemplate(t))}
-                                className="rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-night hover:bg-ember-soft"
+                                className="rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-ember-soft"
                               >
                                 Start
                               </button>

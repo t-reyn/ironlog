@@ -13,19 +13,19 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0f1115",
+          background: "#1a4d2e",
         }}
       >
         <span
           style={{
             fontFamily: "sans-serif",
-            fontWeight: 700,
-            fontSize: 76,
-            color: "#f97316",
-            letterSpacing: "-3px",
+            fontWeight: 800,
+            fontSize: 96,
+            color: "#ff9f29",
+            letterSpacing: "-4px",
           }}
         >
-          IL
+          R
         </span>
       </div>
     ),
