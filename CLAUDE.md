@@ -54,11 +54,24 @@ Auth is **email + password** via `supabase.auth.signInWithPassword` / `signUp`. 
 
 `AppShell` owns 4 tabs: **Dashboard**, **Log**, **Progress**, **Tools**.
 
+Navigation is a **fixed bottom bar** (`<nav>`, `z-30`, with `env(safe-area-inset-bottom)` padding) that stacks the primary "Start workout" / "Continue workout →" button above the `TabBar`. This is the single entry point for all workout starts; when `draft` is set it reads "Continue workout →" and opens the logger directly. Main content carries `pb-36` so it clears the bar.
+
 - **Log tab** always renders `<History />` (workout history list). It never renders the logger directly.
 - **WorkoutLogger** is a `fixed inset-0 z-50` full-screen overlay rendered by `AppShell` when `showLogger && draft`. It receives `onClose` and calls it after finish or discard.
-- **StartModal** is a `fixed inset-0 z-40` bottom-sheet overlay with three options: Empty / Repeat previous / Use a template. It also contains the full template builder and `TemplateEditor`. Opened by the persistent "Start workout" / "Continue workout →" button above the tab bar.
+- **StartModal** is a `fixed inset-0 z-40` bottom-sheet overlay: Empty / Repeat previous / Use a template, plus the template list and `TemplateEditor`.
 
-The button above tabs is the single entry point for all workout starts. When `draft` is set, it reads "Continue workout →" and opens the logger overlay directly.
+**z-index ladder** (everything is a sibling overlay — keep these distinct): bottom nav `z-30` → StartModal / ExercisePicker `z-40` → WorkoutLogger `z-50` → RestTimer `z-[60]` → Toaster `z-[70]` → DialogHost `z-[80]`. The RestTimer is rendered once in `AppShell` as a `fixed` element (not inside the logger) so it floats above both the bottom bar and the logger; `AppShell` passes a `bottomOffset` that shrinks when the logger is open.
+
+### UI primitives — never use native `window.*` dialogs
+
+Three small standalone Zustand stores back app-wide UI, each with a host component mounted once in `AppShell`:
+
+- **`lib/toast.ts`** → `<Toaster />`. Import the `toast` helper (`toast.success/error/show`). `toast.show(msg, { action: { label: "Undo", onClick } })` renders an Undo button — this is the forgiveness pattern for destructive actions.
+- **`lib/dialog.ts`** → `<DialogHost />`. `await confirmDialog({ title, message, danger })` returns a `boolean`; `await promptDialog({...})` returns `string | null`. Use these instead of `window.confirm` / `window.alert` / `window.prompt`.
+
+Destructive flows (discard, replace, delete) call `confirmDialog({ danger: true })`; reversible removals (a set or exercise in the logger) instead remove immediately and surface a `toast` with an **Undo** action backed by `insertDraftSet` / `insertDraftExercise` store actions.
+
+The template-creation modal is the shared `<TemplateBuilder />` component (used by both `StartModal` and `Tools`) — don't re-inline it.
 
 ### Database (Supabase)
 
@@ -102,10 +115,11 @@ Store mutations spread — no immer. `useStore.setState(fn)` is used outside com
 ### Palette (Tailwind v4 `@theme` in `app/globals.css`)
 
 Dark theme. Key tokens:
-- `ember` / `ember-soft` — primary accent (buttons, active tab, charts).
+- `ember` / `ember-soft` — primary accent (buttons, active tab, charts). **Not for destructive UI** — use `danger`.
+- `danger` / `danger-soft` — destructive actions only (discard / delete / replace, error toasts/banners).
 - `night` (#0f1115) — darkest background; text colour on ember buttons.
 - `surface` / `line` — card backgrounds and borders.
-- `ink` / `ink-soft` / `ink-faint` — text hierarchy.
+- `ink` / `ink-soft` / `ink-faint` — text hierarchy. `ink-faint` is tuned to ~4.5:1 on `surface` (WCAG AA); don't darken it.
 - `mg-*` — muscle-group colours used by `ExerciseFigure` and `MuscleRadar`.
 - `heat-0..4` — heatmap intensity ramp.
 
@@ -143,5 +157,7 @@ Dark theme. Key tokens:
 - `"use client"` on every component that uses state, effects, or browser APIs.
 - Path alias `@/*` resolves to the project root (`tsconfig.json`).
 - No comments inside functions unless capturing non-obvious behaviour.
+- No native `window.confirm/alert/prompt` — use `confirmDialog`/`promptDialog`/`toast` (see UI primitives above).
+- Icon-only buttons (`✕ ✓ ←`) need an `aria-label`; this is a mobile-first, touch-target-conscious UI.
 - Always select the raw array from the store (`useStore(s => s.workouts)`) and filter/sort with `useMemo` in the component — never filter inside the selector (new array reference every render trips React 19's snapshot check).
 - TypeScript closure narrowing does not apply inside function bodies — add an explicit `if (!draft) return` inside any function that uses `draft` even when the outer scope has already narrowed it.

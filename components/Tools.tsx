@@ -8,16 +8,17 @@ import {
   deleteCustomExercise,
   deleteCustomExerciseAndSets,
   deleteTemplate,
-  saveTemplate,
   submitFeedback,
   updateProfile,
   type TemplateWithSets,
 } from "@/lib/db";
+import { confirmDialog } from "@/lib/dialog";
+import { toast } from "@/lib/toast";
 import { exportWorkoutsToCsv, downloadCsv } from "@/lib/csv";
 import { estimateOneRepMax, round1 } from "@/lib/oneRepMax";
 import { MUSCLE_COLORS } from "@/lib/muscles";
 import { ExerciseFigure } from "./ExerciseFigure";
-import { ExercisePicker } from "./ExercisePicker";
+import { TemplateBuilder } from "./TemplateBuilder";
 import { TemplateEditor } from "./TemplateEditor";
 import {
   ALL_MOVEMENT_PATTERNS,
@@ -46,10 +47,6 @@ export function Tools() {
   const [editingTpl, setEditingTpl] = useState<TemplateWithSets | null>(null);
   const [tplsOpen, setTplsOpen] = useState(true);
   const [building, setBuilding] = useState(false);
-  const [tplName, setTplName] = useState("New Template");
-  const [tplExs, setTplExs] = useState<string[]>([]);
-  const [pickingForTpl, setPickingForTpl] = useState(false);
-  const [savingTpl, setSavingTpl] = useState(false);
   const [busyTpl, setBusyTpl] = useState<string | null>(null);
 
   // custom exercises
@@ -104,14 +101,18 @@ export function Tools() {
     }
   }
 
-  async function removeCustomExercise(id: string) {
+  async function removeCustomExercise(id: string, name: string) {
     const isUsed = usedCustomIds.has(id);
-    const confirmed = window.confirm(
-      isUsed
-        ? "This exercise has been logged in workouts. Deleting it will remove those sets from your history. Continue?"
-        : "Delete this custom exercise?",
-    );
-    if (!confirmed) return;
+    const ok = await confirmDialog({
+      title: "Delete custom exercise?",
+      message: isUsed
+        ? `“${name}” has been logged in workouts. Deleting it will also remove those sets from your history.`
+        : `“${name}” will be permanently removed.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      danger: true,
+    });
+    if (!ok) return;
     setDeletingCustom(id);
     try {
       if (isUsed) {
@@ -121,6 +122,9 @@ export function Tools() {
         await deleteCustomExercise(id);
       }
       await refreshExercises();
+      toast.success(`Deleted “${name}”.`);
+    } catch {
+      toast.error("Couldn't delete exercise.");
     } finally {
       setDeletingCustom(null);
     }
@@ -162,33 +166,27 @@ export function Tools() {
   function exportCsv() {
     const csv = exportWorkoutsToCsv(workouts, exercises);
     downloadCsv(`ironlog-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    toast.success(`Exported ${workouts.length} workout${workouts.length !== 1 ? "s" : ""} to CSV.`);
   }
 
-  async function removeTpl(id: string) {
-    if (!window.confirm("Delete this template?")) return;
+  async function removeTpl(id: string, name: string) {
+    const ok = await confirmDialog({
+      title: "Delete template?",
+      message: `“${name}” will be permanently removed.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      danger: true,
+    });
+    if (!ok) return;
     setBusyTpl(id);
     try {
       await deleteTemplate(id);
       await refreshTemplates();
+      toast.success(`Deleted “${name}”.`);
+    } catch {
+      toast.error("Couldn't delete template.");
     } finally {
       setBusyTpl(null);
-    }
-  }
-
-  async function saveNewTemplate() {
-    if (!tplName.trim() || tplExs.length === 0) return;
-    setSavingTpl(true);
-    try {
-      const sets = tplExs.flatMap((exercise_id) =>
-        [0, 1, 2].map((set_index) => ({ exercise_id, set_index, weight: 0, reps: 0 })),
-      );
-      await saveTemplate({ name: tplName.trim(), sets });
-      await refreshTemplates();
-      setBuilding(false);
-      setTplName("New Template");
-      setTplExs([]);
-    } finally {
-      setSavingTpl(false);
     }
   }
 
@@ -227,52 +225,53 @@ export function Tools() {
             ) : (
               <ul className="flex flex-col gap-2">
                 {templates.map((t) => {
-              const ids = [...new Set(t.sets.map((s) => s.exercise_id))];
-              return (
-                <li key={t.id} className="rounded-lg border border-line bg-night p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-ink">{t.name}</span>
-                    <div className="flex shrink-0 gap-1.5">
-                      <button
-                        onClick={() => setEditingTpl(t)}
-                        className="rounded-lg border border-line px-3 py-1.5 text-sm text-ink-soft hover:text-ink"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => removeTpl(t.id)}
-                        disabled={busyTpl === t.id}
-                        className="text-ink-faint hover:text-ember-soft disabled:opacity-40"
-                        title="Delete template"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                    {ids.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {ids.map((id) => {
-                          const ex = exerciseById(id);
-                          const count = t.sets.filter((s) => s.exercise_id === id).length;
-                          return (
-                            <div key={id} className="flex items-center gap-1 text-xs text-ink-soft">
-                              <span style={{ color: MUSCLE_COLORS[ex?.muscle_group ?? "core"] }}>
-                                <ExerciseFigure pattern={ex?.movement_pattern ?? "other"} size={20} />
-                              </span>
-                              <span>
-                                {ex?.name ?? "?"}{" "}
-                                <span className="text-ink-faint">×{count}</span>
-                              </span>
-                            </div>
-                          );
-                        })}
+                  const ids = [...new Set(t.sets.map((s) => s.exercise_id))];
+                  return (
+                    <li key={t.id} className="rounded-lg border border-line bg-night p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-ink">{t.name}</span>
+                        <div className="flex shrink-0 gap-1.5">
+                          <button
+                            onClick={() => setEditingTpl(t)}
+                            className="rounded-lg border border-line px-3 py-1.5 text-sm text-ink-soft hover:text-ink"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => removeTpl(t.id, t.name)}
+                            disabled={busyTpl === t.id}
+                            aria-label={`Delete template ${t.name}`}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-2 hover:text-danger-soft disabled:opacity-40"
+                            title="Delete template"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                      {ids.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {ids.map((id) => {
+                            const ex = exerciseById(id);
+                            const count = t.sets.filter((s) => s.exercise_id === id).length;
+                            return (
+                              <div key={id} className="flex items-center gap-1 text-xs text-ink-soft">
+                                <span style={{ color: MUSCLE_COLORS[ex?.muscle_group ?? "core"] }}>
+                                  <ExerciseFigure pattern={ex?.movement_pattern ?? "other"} size={20} />
+                                </span>
+                                <span>
+                                  {ex?.name ?? "?"}{" "}
+                                  <span className="text-ink-faint">×{count}</span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         )}
       </section>
@@ -371,7 +370,7 @@ export function Tools() {
         <div className="mt-3 border-t border-line pt-3">
           <button
             onClick={() => supabase.auth.signOut()}
-            className="text-sm text-ink-faint hover:text-ember-soft"
+            className="text-sm text-ink-faint hover:text-danger-soft"
           >
             Sign out
           </button>
@@ -471,9 +470,10 @@ export function Tools() {
                   </div>
                 </div>
                 <button
-                  onClick={() => removeCustomExercise(ex.id)}
+                  onClick={() => removeCustomExercise(ex.id, ex.name)}
                   disabled={deletingCustom === ex.id}
-                  className="text-ink-faint hover:text-ember-soft disabled:opacity-40"
+                  aria-label={`Delete ${ex.name}`}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-2 hover:text-danger-soft disabled:opacity-40"
                   title="Delete"
                 >
                   ✕
@@ -522,80 +522,11 @@ export function Tools() {
           </button>
         )}
         {feedbackStatus === "error" && (
-          <p className="mt-2 text-center text-xs text-ember-soft">Something went wrong — try again.</p>
+          <p className="mt-2 text-center text-xs text-danger-soft">Something went wrong — try again.</p>
         )}
       </section>
 
-      {/* New template builder */}
-      {building && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-3 sm:items-center">
-          <div className="flex max-h-[85vh] w-full max-w-md flex-col rounded-xl border border-line bg-surface shadow-2xl">
-            <div className="flex items-center justify-between border-b border-line p-4">
-              <h2 className="font-semibold">New template</h2>
-              <button
-                onClick={() => { setBuilding(false); setTplExs([]); setTplName("New Template"); }}
-                className="text-ink-faint hover:text-ink"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <input
-                value={tplName}
-                onChange={(e) => setTplName(e.target.value)}
-                className="mb-4 w-full rounded-lg border border-line bg-night px-3 py-2 text-ink outline-none focus:border-ember"
-                placeholder="Template name"
-              />
-              {tplExs.length > 0 && (
-                <ul className="mb-3 flex flex-col gap-1.5">
-                  {tplExs.map((id, i) => {
-                    const ex = exerciseById(id);
-                    return (
-                      <li
-                        key={`${id}-${i}`}
-                        className="flex items-center gap-2 rounded-lg border border-line bg-night px-3 py-2"
-                      >
-                        <span style={{ color: MUSCLE_COLORS[ex?.muscle_group ?? "core"] }}>
-                          <ExerciseFigure pattern={ex?.movement_pattern ?? "other"} size={24} />
-                        </span>
-                        <span className="flex-1 text-sm text-ink">{ex?.name ?? "?"}</span>
-                        <button
-                          onClick={() => setTplExs((prev) => prev.filter((_, j) => j !== i))}
-                          className="text-ink-faint hover:text-ember-soft"
-                        >
-                          ✕
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              <button
-                onClick={() => setPickingForTpl(true)}
-                className="w-full rounded-lg border border-dashed border-line py-2 text-sm text-ink-soft hover:text-ink"
-              >
-                + Add exercise
-              </button>
-            </div>
-            <div className="border-t border-line p-4">
-              <button
-                onClick={saveNewTemplate}
-                disabled={savingTpl || tplExs.length === 0 || !tplName.trim()}
-                className="w-full rounded-lg bg-ember py-2.5 font-medium text-night hover:bg-ember-soft disabled:opacity-50"
-              >
-                {savingTpl ? "Saving…" : "Save template"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {pickingForTpl && (
-        <ExercisePicker
-          onPick={(id) => { setTplExs((prev) => [...prev, id]); setPickingForTpl(false); }}
-          onClose={() => setPickingForTpl(false)}
-        />
-      )}
+      {building && <TemplateBuilder onClose={() => setBuilding(false)} />}
 
       {editingTpl && (
         <TemplateEditor
@@ -659,7 +590,7 @@ function ChangePassword() {
         placeholder="Confirm password"
         className="rounded-lg border border-line bg-night px-3 py-2 text-sm text-ink outline-none focus:border-ember"
       />
-      {error && <p className="text-xs text-ember-soft">{error}</p>}
+      {error && <p className="text-xs text-danger-soft">{error}</p>}
       <div className="flex gap-2">
         <button
           type="submit"

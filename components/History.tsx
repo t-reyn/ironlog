@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { deleteWorkout } from "@/lib/db";
+import { confirmDialog } from "@/lib/dialog";
+import { toast } from "@/lib/toast";
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
@@ -13,28 +15,17 @@ function fmtDuration(s: number | null) {
   return `${Math.floor(s / 3600)}h ${Math.round((s % 3600) / 60)}m`;
 }
 
-export function History({ onStart }: { onStart: () => void }) {
+export function History({ onStart, onNew }: { onStart: () => void; onNew: () => void }) {
   const workouts = useStore((s) => s.workouts);
   const exercises = useStore((s) => s.exercises);
   const startEdit = useStore((s) => s.startEdit);
   const startFromWorkout = useStore((s) => s.startFromWorkout);
   const draft = useStore((s) => s.draft);
-
   const refreshWorkouts = useStore((s) => s.refreshWorkouts);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  async function removeWorkout(id: string, name: string) {
-    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    setDeletingId(id);
-    try {
-      await deleteWorkout(id);
-      await refreshWorkouts();
-    } finally {
-      setDeletingId(null);
-    }
-  }
-
   const allWorkouts = useMemo(() => {
+    const exMap = new Map(exercises.map((e) => [e.id, e]));
     return [...workouts]
       .sort((a, b) => b.performed_at.localeCompare(a.performed_at))
       .map((w) => {
@@ -43,7 +34,7 @@ export function History({ onStart }: { onStart: () => void }) {
         for (const s of w.sets) {
           if (!seen.has(s.exercise_id)) {
             seen.add(s.exercise_id);
-            const ex = exercises.find((e) => e.id === s.exercise_id);
+            const ex = exMap.get(s.exercise_id);
             if (ex) exerciseNames.push(ex.name);
           }
         }
@@ -52,16 +43,48 @@ export function History({ onStart }: { onStart: () => void }) {
       });
   }, [workouts, exercises]);
 
-  function editWorkout(w: (typeof allWorkouts)[number]) {
-    if (draft && !window.confirm("Replace the workout in progress?")) return;
-    startEdit(w);
+  async function withReplaceGuard(action: () => void) {
+    if (draft) {
+      const ok = await confirmDialog({
+        title: "Replace workout in progress?",
+        message: "You have an unfinished workout. Starting this one will discard it.",
+        confirmLabel: "Replace",
+        cancelLabel: "Keep current",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    action();
     onStart();
   }
 
+  function editWorkout(w: (typeof allWorkouts)[number]) {
+    withReplaceGuard(() => startEdit(w));
+  }
+
   function repeatWorkout(w: (typeof allWorkouts)[number]) {
-    if (draft && !window.confirm("Replace the workout in progress?")) return;
-    startFromWorkout(w);
-    onStart();
+    withReplaceGuard(() => startFromWorkout(w));
+  }
+
+  async function removeWorkout(id: string, name: string) {
+    const ok = await confirmDialog({
+      title: "Delete workout?",
+      message: `“${name}” will be permanently removed. This cannot be undone.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      danger: true,
+    });
+    if (!ok) return;
+    setDeletingId(id);
+    try {
+      await deleteWorkout(id);
+      await refreshWorkouts();
+      toast.success(`Deleted “${name}”.`);
+    } catch {
+      toast.error("Couldn't delete workout.");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -70,9 +93,15 @@ export function History({ onStart }: { onStart: () => void }) {
         Workout history{allWorkouts.length > 0 && ` (${allWorkouts.length})`}
       </h2>
       {allWorkouts.length === 0 ? (
-        <p className="rounded-xl border border-line bg-surface/70 p-6 text-center text-sm text-ink-faint">
-          No workouts logged yet.
-        </p>
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-line bg-surface/70 p-8 text-center">
+          <p className="text-sm text-ink-soft">No workouts logged yet.</p>
+          <button
+            onClick={onNew}
+            className="rounded-lg bg-ember px-4 py-2.5 text-sm font-semibold text-night hover:bg-ember-soft"
+          >
+            Start a workout
+          </button>
+        </div>
       ) : (
         <ul className="flex flex-col gap-2">
           {allWorkouts.map((w) => {
@@ -115,7 +144,8 @@ export function History({ onStart }: { onStart: () => void }) {
                     <button
                       onClick={() => removeWorkout(w.id, w.name)}
                       disabled={deletingId === w.id}
-                      className="rounded-lg border border-line px-3 py-1.5 text-sm text-ink-faint hover:text-ember-soft disabled:opacity-40"
+                      aria-label={`Delete ${w.name}`}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-faint hover:border-danger/50 hover:text-danger-soft disabled:opacity-40"
                       title="Delete workout"
                     >
                       {deletingId === w.id ? "…" : "✕"}
