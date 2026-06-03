@@ -40,7 +40,10 @@ export function UpdateBanner() {
   }
 
   return (
-    <div className="fixed bottom-20 left-3 right-3 z-[100] rounded-xl border border-ember/50 bg-surface/95 p-3 shadow-lg backdrop-blur sm:left-auto sm:right-4 sm:w-72">
+    <div
+      className="fixed left-3 right-3 z-[100] rounded-xl border border-ember/50 bg-surface/95 p-3 shadow-lg backdrop-blur sm:left-auto sm:right-4 sm:w-72"
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 9.5rem)" }}
+    >
       <p className="text-sm font-medium text-ink">Update available</p>
       <p className="mt-0.5 text-xs text-ink-faint">A new version of IronLog is ready.</p>
       <button
