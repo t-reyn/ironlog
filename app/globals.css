@@ -1,107 +1,116 @@
 @import "tailwindcss";
 
 /* ============================================================
-   REPPA — gym logging app · theme-aware palette
-   Brand: cream #FAF3E3 · forest #1A4D2E · amber #FF9F29 · black #000
-   Light is the default; dark applies via [data-theme="dark"] on <html>
-   or the system preference when no explicit theme is set.
+   Shojin (精進) — gym logging app · theme-aware palette
+   "Shoji" skin: cream #F5F1EA · charcoal #2B2725 · brick red #8E1616.
+   Charcoal carries the primary/brand role (--green); brick red is the
+   action accent (--amber). Light is the default; dark applies via
+   [data-theme="dark"] on <html>, or the system preference otherwise.
    ============================================================ */
 
 /* ---- Raw palette (light, default) ---- */
 :root {
-  --rp-bg: #faf3e3;
-  --rp-bg2: #f3e9cf;
+  --rp-bg: #f5f1ea;
+  --rp-bg2: #ece6dc;
   --rp-surface: #ffffff;
-  --rp-surface2: #fbf4e4;
-  --rp-ink: #15140f;
-  --rp-ink2: #5b574a;
-  --rp-ink3: #9a9684;
-  --rp-line: rgba(21, 20, 15, 0.09);
-  --rp-line2: rgba(21, 20, 15, 0.06);
+  --rp-surface2: #f1ece3;
+  --rp-ink: #2b2725;
+  --rp-ink2: #6f6762;
+  --rp-ink3: #b3a8a0;
+  --rp-line: rgba(43, 39, 37, 0.11);
+  --rp-line2: rgba(43, 39, 37, 0.06);
 
-  --rp-green: #1a4d2e;
-  --rp-green-soft: #e4ece3;
-  --rp-green-ink: #1a4d2e;
-  --rp-on-green: #faf3e3;
+  --rp-green: #2b2725; /* charcoal — primary/brand */
+  --rp-green-soft: #e7e1d7;
+  --rp-green-ink: #6f6762;
+  --rp-on-green: #f5f1ea;
 
-  --rp-amber: #ff9f29;
-  --rp-amber-hover: #f08c0c;
-  --rp-amber-soft: #fce7c6;
-  --rp-amber-ink: #b86e00; /* readable amber text on light */
-  --rp-on-amber: #1a1a12;
+  --rp-amber: #8e1616; /* brick red — action accent */
+  --rp-amber-hover: #a81b1b;
+  --rp-amber-soft: #f2dad7;
+  --rp-amber-ink: #8e1616;
+  --rp-on-amber: #f5f1ea;
 
-  --rp-danger: #d6473f;
-  --rp-danger-soft: #e06a63;
+  --rp-danger: #c0392b;
+  --rp-danger-soft: #d2453a;
 
-  /* heatmap ramp (empty → max), green family */
-  --rp-heat-0: #ece3cf;
-  --rp-heat-1: #c5dcc9;
-  --rp-heat-2: #7fb58e;
-  --rp-heat-3: #3f8557;
-  --rp-heat-4: #1a4d2e;
+  /* heatmap ramp (empty → max), warm taupe → charcoal */
+  --rp-heat-0: #ece6dc;
+  --rp-heat-1: #d8d0c7;
+  --rp-heat-2: #a89d90;
+  --rp-heat-3: #6f6762;
+  --rp-heat-4: #2b2725;
 
-  --rp-shadow-sm: 0 1px 2px rgba(21, 20, 15, 0.05), 0 4px 12px rgba(21, 20, 15, 0.04);
-  --rp-shadow: 0 1px 2px rgba(21, 20, 15, 0.04), 0 10px 26px rgba(21, 20, 15, 0.055);
+  --rp-shadow-sm: 0 1px 2px rgba(43, 39, 37, 0.05), 0 4px 12px rgba(43, 39, 37, 0.05);
+  --rp-shadow: 0 1px 2px rgba(43, 39, 37, 0.05), 0 10px 26px rgba(43, 39, 37, 0.07);
 }
 
 /* ---- Dark, when explicitly chosen ---- */
 :root[data-theme="dark"] {
-  --rp-bg: #000000;
-  --rp-bg2: #0b0d0a;
-  --rp-surface: #121511;
-  --rp-surface2: #1a1e17;
-  --rp-ink: #faf3e3;
-  --rp-ink2: rgba(250, 243, 227, 0.6);
-  --rp-ink3: rgba(250, 243, 227, 0.38);
-  --rp-line: rgba(250, 243, 227, 0.11);
-  --rp-line2: rgba(250, 243, 227, 0.07);
+  --rp-bg: #2b2725;
+  --rp-bg2: #211d1b;
+  --rp-surface: #38332f;
+  --rp-surface2: #423c37;
+  --rp-ink: #f5f1ea;
+  --rp-ink2: rgba(245, 241, 234, 0.64);
+  --rp-ink3: rgba(245, 241, 234, 0.4);
+  --rp-line: rgba(245, 241, 234, 0.12);
+  --rp-line2: rgba(245, 241, 234, 0.07);
 
-  --rp-green-soft: #15251a;
-  --rp-green-ink: #79c79a;
+  --rp-green: #6f6762;
+  --rp-green-soft: #423c37;
+  --rp-green-ink: #d3cbc1;
+  --rp-on-green: #f5f1ea;
 
-  --rp-amber-hover: #ffb24d;
-  --rp-amber-soft: #3a2c12;
-  --rp-amber-ink: #ff9f29;
+  --rp-amber: #d2453a;
+  --rp-amber-hover: #e06054;
+  --rp-amber-soft: #3e2422;
+  --rp-amber-ink: #e06054;
+  --rp-on-amber: #f5f1ea;
 
-  --rp-danger: #f0556d;
-  --rp-danger-soft: #f87a8c;
+  --rp-danger: #d2453a;
+  --rp-danger-soft: #e06054;
 
-  --rp-heat-0: #1b2029;
-  --rp-heat-1: #15251a;
-  --rp-heat-2: #1f5a38;
-  --rp-heat-3: #2f8a52;
-  --rp-heat-4: #79c79a;
+  --rp-heat-0: #211d1b;
+  --rp-heat-1: #423c37;
+  --rp-heat-2: #6f6762;
+  --rp-heat-3: #9a9183;
+  --rp-heat-4: #d3cbc1;
 
-  --rp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.45);
-  --rp-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 34px rgba(0, 0, 0, 0.55);
+  --rp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.4);
+  --rp-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 34px rgba(0, 0, 0, 0.5);
 }
 
 /* ---- Dark, following the system when no explicit theme ---- */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --rp-bg: #000000;
-    --rp-bg2: #0b0d0a;
-    --rp-surface: #121511;
-    --rp-surface2: #1a1e17;
-    --rp-ink: #faf3e3;
-    --rp-ink2: rgba(250, 243, 227, 0.6);
-    --rp-ink3: rgba(250, 243, 227, 0.38);
-    --rp-line: rgba(250, 243, 227, 0.11);
-    --rp-line2: rgba(250, 243, 227, 0.07);
-    --rp-green-soft: #15251a;
-    --rp-green-ink: #79c79a;
-    --rp-amber-hover: #ffb24d;
-    --rp-amber-soft: #3a2c12;
-    --rp-amber-ink: #ff9f29;
-    --rp-danger: #f0556d;
-    --rp-danger-soft: #f87a8c;
-    --rp-heat-0: #1b2029;
-    --rp-heat-1: #15251a;
-    --rp-heat-2: #1f5a38;
-    --rp-heat-3: #2f8a52;
-    --rp-heat-4: #79c79a;
-    --rp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.45);
-    --rp-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 34px rgba(0, 0, 0, 0.55);
+    --rp-bg: #2b2725;
+    --rp-bg2: #211d1b;
+    --rp-surface: #38332f;
+    --rp-surface2: #423c37;
+    --rp-ink: #f5f1ea;
+    --rp-ink2: rgba(245, 241, 234, 0.64);
+    --rp-ink3: rgba(245, 241, 234, 0.4);
+    --rp-line: rgba(245, 241, 234, 0.12);
+    --rp-line2: rgba(245, 241, 234, 0.07);
+    --rp-green: #6f6762;
+    --rp-green-soft: #423c37;
+    --rp-green-ink: #d3cbc1;
+    --rp-on-green: #f5f1ea;
+    --rp-amber: #d2453a;
+    --rp-amber-hover: #e06054;
+    --rp-amber-soft: #3e2422;
+    --rp-amber-ink: #e06054;
+    --rp-on-amber: #f5f1ea;
+    --rp-danger: #d2453a;
+    --rp-danger-soft: #e06054;
+    --rp-heat-0: #211d1b;
+    --rp-heat-1: #423c37;
+    --rp-heat-2: #6f6762;
+    --rp-heat-3: #9a9183;
+    --rp-heat-4: #d3cbc1;
+    --rp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.4);
+    --rp-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 34px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -122,7 +131,7 @@
   --color-ink-faint: var(--rp-ink3);
   --color-on-accent: var(--rp-on-amber); /* dark text on amber/danger buttons */
 
-  /* brand — ember is REPPA amber, the primary action accent */
+  /* brand — ember is the Shojin red, the primary action accent */
   --color-ember: var(--rp-amber);
   --color-ember-soft: var(--rp-amber-hover);
   --color-amber: var(--rp-amber);
@@ -186,7 +195,7 @@
   }
 }
 
-/* ---- REPPA helper classes ---- */
+/* ---- Shojin helper classes ---- */
 /* mono uppercase label used as section eyebrows */
 .rp-eyebrow {
   font-family: var(--font-mono);
@@ -200,8 +209,8 @@
 
 /* Brief flash when a rest timer hits zero */
 @keyframes timer-flash {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 159, 41, 0); }
-  50% { box-shadow: 0 0 0 6px rgba(255, 159, 41, 0.45); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(210, 69, 58, 0); }
+  50% { box-shadow: 0 0 0 6px rgba(210, 69, 58, 0.45); }
 }
 .timer-done {
   animation: timer-flash 0.7s ease-in-out 3;

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { ShojinIcon } from "./ShojinLogo";
+import { Icon } from "./ShojinUI";
 
 type Mode = "signin" | "signup";
 type Status = "idle" | "busy" | "error";
@@ -11,6 +13,7 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
 
@@ -48,73 +51,102 @@ export function Login() {
     setConfirm("");
   }
 
+  const fieldClass =
+    "flex items-center gap-2.5 rounded-2xl border-[1.5px] border-line bg-surface px-4 h-14 focus-within:border-green-ink";
+
   return (
-    <div className="mx-auto flex max-w-sm flex-1 flex-col justify-center gap-6 p-8">
-      <div>
-        <h1 className="text-4xl font-extrabold tracking-[-0.03em]">
-          REP<span className="text-amber">PA</span>
-        </h1>
-        <p className="mt-1 text-ink-soft">Log lifts, progress, and streaks.</p>
+    <div className="mx-auto flex min-h-[100dvh] w-full max-w-sm flex-1 flex-col px-7 pt-24 pb-10">
+      <div className="flex flex-col items-center gap-5">
+        <ShojinIcon size={72} radius={18} />
+        <div className="text-center">
+          <h1 className="text-[30px] font-extrabold tracking-[-0.02em]">
+            {mode === "signin" ? "Welcome back" : "Begin today"}
+          </h1>
+          <p className="mt-2 text-[15px] font-medium text-ink-soft">Consistency through devotion.</p>
+        </div>
       </div>
 
-      <form onSubmit={submit} className="flex flex-col gap-3">
-        <label className="text-sm text-ink-soft" htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-ink outline-none focus:border-ember"
-        />
-        <label className="text-sm text-ink-soft" htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-ink outline-none focus:border-ember"
-        />
-        {mode === "signup" && (
-          <>
-            <label className="text-sm text-ink-soft" htmlFor="confirm">Confirm password</label>
+      <form onSubmit={submit} className="mt-10 flex flex-col gap-4">
+        <div>
+          <div className="mb-2 ml-1 font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-faint">Email</div>
+          <label className={fieldClass}>
+            <Icon name="profile" size={19} color="var(--color-ink-faint)" />
             <input
-              id="confirm"
-              type="password"
+              type="email"
               required
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              placeholder="••••••••"
-              className="rounded-lg border border-line bg-surface px-3 py-2 text-ink outline-none focus:border-ember"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="min-w-0 flex-1 bg-transparent text-base font-medium text-ink outline-none placeholder:text-ink-faint"
             />
-          </>
+          </label>
+        </div>
+
+        <div>
+          <div className="mb-2 ml-1 font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-faint">Password</div>
+          <label className={fieldClass}>
+            <Icon name="bolt" size={19} color="var(--color-ink-faint)" />
+            <input
+              type={showPw ? "text" : "password"}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="min-w-0 flex-1 bg-transparent text-base font-medium text-ink outline-none placeholder:text-ink-faint"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw((v) => !v)}
+              className="shrink-0 text-[13px] font-semibold text-green-ink"
+            >
+              {showPw ? "Hide" : "Show"}
+            </button>
+          </label>
+        </div>
+
+        {mode === "signup" && (
+          <div>
+            <div className="mb-2 ml-1 font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-faint">Confirm</div>
+            <label className={fieldClass}>
+              <Icon name="bolt" size={19} color="var(--color-ink-faint)" />
+              <input
+                type={showPw ? "text" : "password"}
+                required
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="••••••••"
+                className="min-w-0 flex-1 bg-transparent text-base font-medium text-ink outline-none placeholder:text-ink-faint"
+              />
+            </label>
+          </div>
         )}
-        {error && <p className="text-sm text-ember-soft">{error}</p>}
+
+        {error && <p className="text-sm font-medium text-danger-soft">{error}</p>}
+
         <button
           type="submit"
           disabled={status === "busy"}
-          className="rounded-lg bg-ember px-4 py-2 font-medium text-on-accent transition hover:bg-ember-soft disabled:opacity-60"
+          className="mt-3 h-14 w-full rounded-full bg-green font-bold text-on-green transition hover:opacity-95 disabled:opacity-60"
         >
           {status === "busy"
             ? mode === "signin" ? "Signing in…" : "Creating account…"
-            : mode === "signin" ? "Sign in" : "Create account"}
+            : "Continue"}
         </button>
       </form>
 
-      <p className="text-center text-sm text-ink-faint">
-        {mode === "signin" ? (
-          <>No account?{" "}
-            <button onClick={() => switchMode("signup")} className="text-ink-soft hover:text-ink">Sign up</button>
-          </>
-        ) : (
-          <>Already have an account?{" "}
-            <button onClick={() => switchMode("signin")} className="text-ink-soft hover:text-ink">Sign in</button>
-          </>
-        )}
-      </p>
+      <div className="flex-1" />
+
+      <div className="flex items-center justify-center gap-1.5 pt-6 text-[14.5px]">
+        <span className="text-ink-faint">
+          {mode === "signin" ? "New to shōjin?" : "Already training?"}
+        </span>
+        <button
+          onClick={() => switchMode(mode === "signin" ? "signup" : "signin")}
+          className="font-bold text-green-ink"
+        >
+          {mode === "signin" ? "Begin today" : "Sign in"}
+        </button>
+      </div>
     </div>
   );
 }

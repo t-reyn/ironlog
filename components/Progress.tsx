@@ -15,12 +15,13 @@ import { blendedOneRepMax, estimateOneRepMax, round1 } from "@/lib/oneRepMax";
 import { localDay } from "@/lib/stats";
 import { volumeByMuscle, MUSCLE_LABELS } from "@/lib/muscles";
 import type { MuscleGroup } from "@/lib/types";
-import { Eyebrow, Delta, Pill } from "./Reppa";
+import { Eyebrow, Delta, Pill } from "./ShojinUI";
 
-const PR_LIFTS: { label: string; match: RegExp }[] = [
-  { label: "Bench", match: /bench/i },
-  { label: "Squat", match: /squat/i },
-  { label: "Deadlift", match: /deadlift/i },
+// Exact lifts only — no variants (e.g. not "Iso-Lateral … Bench Press").
+const PR_LIFTS: { label: string; names: string[] }[] = [
+  { label: "Bench", names: ["Bench Press (Barbell)"] },
+  { label: "Squat", names: ["Back Squat"] },
+  { label: "Deadlift", names: ["Deadlift", "Sumo Deadlift"] },
 ];
 
 type Metric = "e1rm" | "top" | "volume";
@@ -93,8 +94,8 @@ export function Progress() {
   }, [workouts, exerciseById]);
 
   const prs = useMemo(() => {
-    return PR_LIFTS.map(({ label, match }) => {
-      const ids = new Set(exercises.filter((e) => match.test(e.name)).map((e) => e.id));
+    return PR_LIFTS.map(({ label, names }) => {
+      const ids = new Set(exercises.filter((e) => names.includes(e.name)).map((e) => e.id));
       let best = 0;
       if (ids.size > 0) {
         for (const w of workouts) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, type ReactNode } from "react";
-import { Icon } from "./Reppa";
+import { Icon } from "./ShojinUI";
 
 export interface TabDef<T extends string> {
   id: T;
@@ -21,7 +21,7 @@ interface Props<T extends string> {
 }
 
 /**
- * REPPA bottom bar: four tabs split around a raised amber + FAB.
+ * Shojin bottom bar: four tabs split around a raised amber + FAB.
  * Layout: [tab tab] (FAB) [tab tab].
  */
 export function TabBar<T extends string>({ tabs, active, onChange, onFab, fabActive }: Props<T>) {

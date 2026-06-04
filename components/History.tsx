@@ -5,7 +5,7 @@ import { useStore } from "@/lib/store";
 import { deleteWorkout } from "@/lib/db";
 import { confirmDialog } from "@/lib/dialog";
 import { toast } from "@/lib/toast";
-import { Eyebrow, Icon } from "./Reppa";
+import { Eyebrow, Icon } from "./ShojinUI";
 
 function fmtDuration(s: number | null) {
   if (!s) return null;

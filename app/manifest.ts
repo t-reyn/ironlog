@@ -2,13 +2,13 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "REPPA",
-    short_name: "REPPA",
+    name: "Shojin",
+    short_name: "Shojin",
     description: "Log lifts, templates, and progress.",
     start_url: "/",
     display: "standalone",
-    background_color: "#faf3e3",
-    theme_color: "#1a4d2e",
+    background_color: "#f5f1ea",
+    theme_color: "#2b2725",
     orientation: "portrait",
     icons: [
       { src: "/icon", sizes: "192x192", type: "image/png" },

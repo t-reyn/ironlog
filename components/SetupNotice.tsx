@@ -1,7 +1,7 @@
 export function SetupNotice() {
   return (
     <div className="mx-auto flex max-w-xl flex-1 flex-col justify-center gap-4 p-8">
-      <h1 className="text-2xl font-bold tracking-[-0.02em] text-green-ink">REPPA needs Supabase</h1>
+      <h1 className="text-2xl font-bold tracking-[-0.02em] text-green-ink">Shojin needs Supabase</h1>
       <p className="text-ink-soft">
         Create a Supabase project, run <code className="text-steel">supabase/schema.sql</code>{" "}
         in its SQL editor, then add these to a{" "}

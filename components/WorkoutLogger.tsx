@@ -9,7 +9,7 @@ import { toast } from "@/lib/toast";
 import { ExerciseFigure } from "./ExerciseFigure";
 import { ExercisePicker } from "./ExercisePicker";
 import { SetRow } from "./SetRow";
-import { Icon } from "./Reppa";
+import { Icon } from "./ShojinUI";
 
 export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const draft = useStore((s) => s.draft);
