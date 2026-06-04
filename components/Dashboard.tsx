@@ -7,7 +7,8 @@ import { StreakHeatmap } from "./StreakHeatmap";
 import { BodyweightChart } from "./BodyweightChart";
 import { MuscleRadar } from "./MuscleRadar";
 import { estimateOneRepMax, round1 } from "@/lib/oneRepMax";
-import { Eyebrow, Icon, Delta, Pill, WeekStrip, type WeekDay } from "./Reppa";
+import { Eyebrow, Icon, Delta, Pill, WeekStrip, type WeekDay } from "./ShojinUI";
+import { ShojinIcon, ShojinWordmark } from "./ShojinLogo";
 
 const BIG5 = [
   "Back Squat",
@@ -133,20 +134,26 @@ export function Dashboard({
   }, [workouts, exercises]);
 
   const Header = (
-    <div className="flex items-start justify-between">
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <ShojinIcon size={30} radius={9} shadow={false} />
+          <ShojinWordmark size={20} color="var(--color-ink)" />
+        </div>
+        <button
+          onClick={onOpenProfile}
+          aria-label="Open profile"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-green text-sm font-extrabold text-on-green transition-transform active:scale-95"
+        >
+          {initials(userEmail)}
+        </button>
+      </div>
       <div>
         <Eyebrow style={{ marginBottom: 7 }}>{view.dateLabel}</Eyebrow>
         <h1 className="text-[30px] font-extrabold leading-none tracking-[-0.025em] whitespace-nowrap">
           {view.greeting}, {nameFromEmail(userEmail)}
         </h1>
       </div>
-      <button
-        onClick={onOpenProfile}
-        aria-label="Open profile"
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-green text-sm font-extrabold text-on-green transition-transform active:scale-95"
-      >
-        {initials(userEmail)}
-      </button>
     </div>
   );
 
@@ -159,7 +166,7 @@ export function Dashboard({
             <Icon name="dumbbell" size={150} color="var(--color-on-green)" />
           </div>
           <div className="rp-eyebrow mb-3" style={{ color: "var(--color-amber)" }}>
-            WELCOME TO REPPA
+            WELCOME TO SHŌJIN
           </div>
           <div className="text-2xl font-extrabold tracking-[-0.02em]">Log your first lift</div>
           <p className="mt-1.5 max-w-xs text-[13px] text-on-green/75">

@@ -20,7 +20,7 @@ import { MUSCLE_COLORS } from "@/lib/muscles";
 import { ExerciseFigure } from "./ExerciseFigure";
 import { TemplateBuilder } from "./TemplateBuilder";
 import { TemplateEditor } from "./TemplateEditor";
-import { Icon } from "./Reppa";
+import { Icon } from "./ShojinUI";
 import { useThemePref, setThemePref, type ThemePref } from "@/lib/theme";
 import {
   ALL_MOVEMENT_PATTERNS,
@@ -168,7 +168,7 @@ export function Tools({ userEmail }: { userEmail: string }) {
 
   function exportCsv() {
     const csv = exportWorkoutsToCsv(workouts, exercises);
-    downloadCsv(`reppa-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    downloadCsv(`shojin-${new Date().toISOString().slice(0, 10)}.csv`, csv);
     toast.success(`Exported ${workouts.length} workout${workouts.length !== 1 ? "s" : ""} to CSV.`);
   }
 

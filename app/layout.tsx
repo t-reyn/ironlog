@@ -17,17 +17,17 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "REPPA",
+  title: "Shojin",
   description: "Log lifts, templates, and progress.",
   appleWebApp: {
     capable: true,
-    title: "REPPA",
+    title: "Shojin",
     statusBarStyle: "black-translucent",
   },
 };
 
 // Apply the saved theme before paint to avoid a light/dark flash.
-const themeScript = `(function(){try{var t=localStorage.getItem('reppa-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
+const themeScript = `(function(){try{var t=localStorage.getItem('shojin-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
 
 export default function RootLayout({
   children,

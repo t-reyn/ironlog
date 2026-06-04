@@ -135,7 +135,7 @@ export function AppShell({ userEmail }: { userEmail: string }) {
       <DialogHost />
       <UpdateBanner />
 
-      {/* REPPA bottom bar: section nav with a raised amber FAB */}
+      {/* Shojin bottom bar: section nav with a raised amber FAB */}
       <nav
         className="fixed inset-x-0 bottom-0 z-30 border-t border-line-2"
         style={{

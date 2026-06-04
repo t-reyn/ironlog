@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 
 export type ThemePref = "system" | "light" | "dark";
 
-const KEY = "reppa-theme";
+const KEY = "shojin-theme";
 
 function read(): ThemePref {
   if (typeof window === "undefined") return "system";

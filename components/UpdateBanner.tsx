@@ -45,7 +45,7 @@ export function UpdateBanner() {
       style={{ bottom: "calc(env(safe-area-inset-bottom) + 9.5rem)" }}
     >
       <p className="text-sm font-medium text-ink">Update available</p>
-      <p className="mt-0.5 text-xs text-ink-faint">A new version of REPPA is ready.</p>
+      <p className="mt-0.5 text-xs text-ink-faint">A new version of Shojin is ready.</p>
       <button
         onClick={applyUpdate}
         className="mt-2.5 w-full rounded-lg bg-ember py-2 text-sm font-medium text-on-accent hover:bg-ember-soft"

@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 
-/* REPPA shared primitives — ported from the design handoff (reppa-ui.jsx). */
+/* Shojin shared primitives — ported from the design handoff. */
 
 type IconName =
   | "home"
