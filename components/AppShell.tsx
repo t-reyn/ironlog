@@ -13,6 +13,7 @@ import { StartModal } from "./StartModal";
 import { Toaster } from "./Toaster";
 import { DialogHost } from "./DialogHost";
 import { UpdateBanner } from "./UpdateBanner";
+import { InstallPrompt } from "./InstallPrompt";
 
 type TabId = "home" | "history" | "progress" | "profile";
 
@@ -134,6 +135,7 @@ export function AppShell({ userEmail }: { userEmail: string }) {
       <Toaster />
       <DialogHost />
       <UpdateBanner />
+      <InstallPrompt />
 
       {/* Shojin bottom bar: section nav with a raised amber FAB */}
       <nav

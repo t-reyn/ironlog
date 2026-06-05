@@ -58,6 +58,7 @@ export interface WorkoutSet {
   is_warmup: boolean;
   completed: boolean;
   unit?: Unit;
+  notes?: string | null;
 }
 
 export interface Template {

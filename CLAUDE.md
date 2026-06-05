@@ -92,6 +92,16 @@ curl -X POST "https://api.supabase.com/v1/projects/drcxxxunbrqlbqwcolay/database
   -d '{"query":"SELECT ..."}'
 ```
 
+### Data safety — never delete user data
+
+User workouts, templates, custom exercises, and bodyweight are the irreplaceable asset. They live only in Supabase Postgres (not in code), so **app/code deploys never touch them** — but schema work can. Rules for any iteration:
+
+- **Migrations are additive only.** New field → `alter table … add column if not exists <name> … <nullable or with default>`. Never `DROP TABLE`, `DROP COLUMN`, `TRUNCATE`, `DELETE` (without a `where` you've verified), or rename a column/table as "cleanup".
+- **`supabase/schema.sql` must stay idempotent and re-runnable** — `create table if not exists`, guarded enums, `on conflict … do update` seeds. It currently is; keep it that way (re-running it must never drop or recreate a populated table).
+- **Never run destructive SQL via the Management API / SQL editor without (1) explicit user confirmation and (2) a fresh backup.** This includes anything that drops, truncates, or mass-updates rows.
+- Take a backup before risky schema work: Supabase Dashboard → Database → Backups (enable PITR), or `pg_dump`. Per-user CSV export also exists in Profile → Data.
+- RLS is owner-only and must stay enabled on every user table; a user can only ever affect their own rows.
+
 ### Store shape
 
 ```ts

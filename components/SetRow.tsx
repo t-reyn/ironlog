@@ -1,9 +1,10 @@
 "use client";
 
 import { useStore, type DraftSetEntry } from "@/lib/store";
-import { blendedOneRepMax, round1 } from "@/lib/oneRepMax";
 import { toast } from "@/lib/toast";
 import type { Unit } from "@/lib/types";
+
+const RPE_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 interface Props {
   exIdx: number;
@@ -18,8 +19,6 @@ export function SetRow({ exIdx, setIdx, set, unit }: Props) {
   const insert = useStore((s) => s.insertDraftSet);
   const startRest = useStore((s) => s.startRest);
   const restDuration = useStore((s) => s.rest.duration);
-
-  const orm = set.isWarmup ? 0 : round1(blendedOneRepMax(set.weight, set.reps));
 
   function toggleDone() {
     const next = !set.done;
@@ -78,9 +77,18 @@ export function SetRow({ exIdx, setIdx, set, unit }: Props) {
         placeholder="0"
       />
 
-      <span className="w-12 text-right text-xs tabular-nums text-ink-soft" title="Estimated 1-rep max">
-        {orm > 0 ? orm : "—"}
-      </span>
+      <select
+        aria-label={`Set ${setIdx + 1} RPE`}
+        title="Rate of perceived exertion"
+        value={set.rpe ?? ""}
+        onChange={(e) => update(exIdx, setIdx, { rpe: e.target.value ? parseFloat(e.target.value) : null })}
+        className="w-14 shrink-0 rounded-md border border-line bg-surface px-1 py-2 text-center text-xs font-mono text-ink-soft outline-none focus:border-ember"
+      >
+        <option value="">—</option>
+        {RPE_OPTIONS.map((v) => (
+          <option key={v} value={v}>{v}</option>
+        ))}
+      </select>
 
       <button
         onClick={toggleDone}

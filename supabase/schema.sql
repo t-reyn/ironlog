@@ -68,12 +68,15 @@ create table if not exists workout_sets (
   reps int not null default 0,
   rpe numeric(3,1),
   is_warmup boolean not null default false,
-  completed boolean not null default true
+  completed boolean not null default true,
+  notes text
 );
 create index if not exists workout_sets_workout on workout_sets (workout_id);
 create index if not exists workout_sets_user_ex on workout_sets (user_id, exercise_id);
 -- Added for per-exercise unit support; run separately on existing DBs:
 -- alter table workout_sets add column if not exists unit text not null default 'kg' check (unit in ('kg','lb'));
+-- Added for per-exercise notes (stored on each set of the exercise); run on existing DBs:
+-- alter table workout_sets add column if not exists notes text;
 
 -- ---------------------------------------------------------------------------
 -- templates + template_sets (planned targets)
