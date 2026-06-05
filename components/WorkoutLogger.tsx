@@ -20,6 +20,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const insertExercise = useStore((s) => s.insertDraftExercise);
   const addSet = useStore((s) => s.addDraftSet);
   const toggleUnit = useStore((s) => s.toggleDraftExerciseUnit);
+  const setExerciseNotes = useStore((s) => s.setDraftExerciseNotes);
   const discard = useStore((s) => s.discardDraft);
   const finish = useStore((s) => s.finishWorkout);
   const exerciseById = useStore((s) => s.exerciseById);
@@ -204,7 +205,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
                   <span className="w-12 text-center">Type</span>
                   <span className="flex-1 text-center">Weight ({exUnit})</span>
                   <span className="flex-1 text-center">Reps</span>
-                  <span className="w-12 text-right">1RM</span>
+                  <span className="w-14 text-center">RPE</span>
                   <span className="w-9 shrink-0" aria-hidden="true" />
                   <span className="w-7 shrink-0" aria-hidden="true" />
                 </div>
@@ -220,6 +221,20 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
                   <Icon name="plus" size={16} color="currentColor" sw={2.2} />
                   Add set
                 </button>
+
+                <div className="mt-2 flex items-start gap-2 border-t border-line-2 pt-3">
+                  <span className="mt-1.5 shrink-0 text-ink-faint">
+                    <Icon name="edit" size={15} color="currentColor" />
+                  </span>
+                  <textarea
+                    value={ex.notes ?? ""}
+                    onChange={(e) => setExerciseNotes(exIdx, e.target.value)}
+                    rows={1}
+                    aria-label={`Notes for ${meta?.name ?? "exercise"}`}
+                    placeholder="Add a note…"
+                    className="min-h-[2rem] w-full resize-y bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
+                  />
+                </div>
               </div>
             );
           })}

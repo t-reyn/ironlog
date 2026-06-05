@@ -58,6 +58,9 @@ export function Login() {
     <div className="mx-auto flex min-h-[100dvh] w-full max-w-sm flex-1 flex-col px-7 pt-24 pb-10">
       <div className="flex flex-col items-center gap-5">
         <ShojinIcon size={72} radius={18} />
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-faint">
+          shōjin · beta
+        </span>
         <div className="text-center">
           <h1 className="text-[30px] font-extrabold tracking-[-0.02em]">
             {mode === "signin" ? "Welcome back" : "Begin today"}

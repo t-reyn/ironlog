@@ -139,6 +139,7 @@ export function Dashboard({
         <div className="flex items-center gap-2">
           <ShojinIcon size={30} radius={9} shadow={false} />
           <ShojinWordmark size={20} color="var(--color-ink)" />
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-faint">(beta)</span>
         </div>
         <button
           onClick={onOpenProfile}
