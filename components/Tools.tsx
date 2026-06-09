@@ -138,15 +138,7 @@ export function Tools({ userEmail }: { userEmail: string }) {
     if (!feedbackMsg.trim()) return;
     setFeedbackStatus("busy");
     try {
-      await submitFeedback(
-        feedbackMsg,
-        customExercisesUsed.map((e) => ({
-          name: e.name,
-          muscle_group: e.muscle_group,
-          movement_pattern: e.movement_pattern,
-          equipment: e.equipment,
-        })),
-      );
+      await submitFeedback(feedbackMsg, []);
       setFeedbackMsg("");
       setFeedbackStatus("sent");
     } catch {
@@ -441,7 +433,7 @@ export function Tools({ userEmail }: { userEmail: string }) {
           <div>
             <h3 className="font-medium">Custom exercises</h3>
             <p className="mt-0.5 text-xs text-ink-faint">
-              Add exercises not in the list. Ones you log are included when you send feedback.
+              Add exercises that aren’t in the list.
             </p>
           </div>
           <button
@@ -555,19 +547,6 @@ export function Tools({ userEmail }: { userEmail: string }) {
           rows={3}
           className="mb-3 w-full resize-none rounded-lg border border-line bg-night px-3 py-2 text-sm text-ink outline-none focus:border-ember"
         />
-        {customExercisesUsed.length > 0 && (
-          <div className="mb-3 rounded-lg border border-line bg-night px-3 py-2 text-xs text-ink-soft">
-            <span className="text-ink-faint">Also sending your logged custom exercises:</span>
-            <ul className="mt-1 flex flex-col gap-0.5">
-              {customExercisesUsed.map((ex) => (
-                <li key={ex.id}>
-                  · {ex.name}{" "}
-                  <span className="text-ink-faint">({ex.muscle_group} · {ex.equipment})</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
         {feedbackStatus === "sent" ? (
           <p className="text-center text-sm text-ember">Sent — thanks!</p>
         ) : (

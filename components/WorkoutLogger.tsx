@@ -26,6 +26,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const exerciseById = useStore((s) => s.exerciseById);
   const profile = useStore((s) => s.profile);
   const refreshTemplates = useStore((s) => s.refreshTemplates);
+  const restActive = useStore((s) => s.rest.endsAt !== null);
 
   const [picking, setPicking] = useState(false);
   const [swappingIdx, setSwappingIdx] = useState<number | null>(null);
@@ -81,10 +82,21 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
     }
   }
 
-  function removeExerciseWithUndo(exIdx: number) {
+  async function removeExerciseWithUndo(exIdx: number) {
     if (!draft) return;
     const meta = exerciseById(draft.exercises[exIdx].exerciseId);
     const snapshot = draft.exercises[exIdx];
+    const setCount = snapshot.sets.length;
+    const ok = await confirmDialog({
+      title: "Remove exercise?",
+      message: `Remove ${meta?.name ?? "this exercise"}${
+        setCount > 0 ? ` and its ${setCount} set${setCount !== 1 ? "s" : ""}` : ""
+      } from this workout?`,
+      confirmLabel: "Remove",
+      cancelLabel: "Cancel",
+      danger: true,
+    });
+    if (!ok) return;
     removeExercise(exIdx);
     toast.show(`Removed ${meta?.name ?? "exercise"}.`, {
       action: { label: "Undo", onClick: () => insertExercise(exIdx, snapshot) },
@@ -163,7 +175,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
 
       {/* Scrollable exercises */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
+        <div className={`mx-auto flex max-w-3xl flex-col gap-4 p-4 ${restActive ? "pb-32" : ""}`}>
           {draft.exercises.map((ex, exIdx) => {
             const meta = exerciseById(ex.exerciseId);
             const exUnit = ex.unit ?? unit;
@@ -194,9 +206,10 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
                   <button
                     onClick={() => removeExerciseWithUndo(exIdx)}
                     aria-label={`Remove ${meta?.name ?? "exercise"}`}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-2 hover:text-danger-soft"
+                    title="Remove exercise"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-faint hover:border-danger/50 hover:bg-surface-2 hover:text-danger-soft"
                   >
-                    ✕
+                    <Icon name="trash" size={17} color="currentColor" />
                   </button>
                 </div>
 

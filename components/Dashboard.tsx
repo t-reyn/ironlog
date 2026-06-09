@@ -41,10 +41,12 @@ function fmtK(v: number): string {
 
 export function Dashboard({
   onStart,
+  onContinue,
   onOpenProfile,
   userEmail,
 }: {
   onStart: () => void;
+  onContinue: () => void;
   onOpenProfile: () => void;
   userEmail: string;
 }) {
@@ -208,7 +210,7 @@ export function Dashboard({
             : "Pick a template or build it as you go"}
         </div>
         <button
-          onClick={onStart}
+          onClick={draft ? onContinue : onStart}
           className="mt-[18px] flex w-full items-center justify-center gap-2 rounded-full bg-amber py-3.5 font-bold text-on-amber"
         >
           <Icon name="play" size={17} color="var(--color-on-amber)" />

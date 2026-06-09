@@ -112,6 +112,7 @@ export function AppShell({ userEmail }: { userEmail: string }) {
             {active === "home" && (
               <Dashboard
                 onStart={() => setShowStart(true)}
+                onContinue={openLogger}
                 onOpenProfile={() => setActive("profile")}
                 userEmail={userEmail}
               />

@@ -4,7 +4,16 @@ import { useStore, type DraftSetEntry } from "@/lib/store";
 import { toast } from "@/lib/toast";
 import type { Unit } from "@/lib/types";
 
-const RPE_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+// RPE below 5 isn't meaningful for tracking, so 1–4 collapse into a single "<5"
+// bucket (stored as 5); the working range 6–10 stays granular.
+const RPE_OPTIONS: { value: number; label: string }[] = [
+  { value: 5, label: "<5" },
+  { value: 6, label: "6" },
+  { value: 7, label: "7" },
+  { value: 8, label: "8" },
+  { value: 9, label: "9" },
+  { value: 10, label: "10" },
+];
 
 interface Props {
   exIdx: number;
@@ -62,6 +71,7 @@ export function SetRow({ exIdx, setIdx, set, unit }: Props) {
         inputMode="decimal"
         aria-label={`Set ${setIdx + 1} weight in ${unit}`}
         value={set.weight || ""}
+        onFocus={(e) => e.currentTarget.select()}
         onChange={(e) => update(exIdx, setIdx, { weight: parseFloat(e.target.value) || 0 })}
         className="w-full min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-2 text-center text-ink outline-none focus:border-ember"
         placeholder="0"
@@ -72,6 +82,7 @@ export function SetRow({ exIdx, setIdx, set, unit }: Props) {
         inputMode="numeric"
         aria-label={`Set ${setIdx + 1} reps`}
         value={set.reps || ""}
+        onFocus={(e) => e.currentTarget.select()}
         onChange={(e) => update(exIdx, setIdx, { reps: parseInt(e.target.value) || 0 })}
         className="w-full min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-2 text-center text-ink outline-none focus:border-ember"
         placeholder="0"
@@ -85,8 +96,8 @@ export function SetRow({ exIdx, setIdx, set, unit }: Props) {
         className="w-14 shrink-0 rounded-md border border-line bg-surface px-1 py-2 text-center text-xs font-mono text-ink-soft outline-none focus:border-ember"
       >
         <option value="">—</option>
-        {RPE_OPTIONS.map((v) => (
-          <option key={v} value={v}>{v}</option>
+        {RPE_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
 

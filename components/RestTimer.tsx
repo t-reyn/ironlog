@@ -79,7 +79,15 @@ export function RestTimer({ bottomOffset }: { bottomOffset?: string } = {}) {
           </div>
           <div className="flex-1" />
           <button
+            onClick={() => startRest(Math.max(5, remaining - 15))}
+            aria-label="Subtract 15 seconds"
+            className="rounded-md border border-line px-2 py-1 text-sm text-ink-soft hover:text-ink"
+          >
+            −15s
+          </button>
+          <button
             onClick={() => startRest(remaining + 15)}
+            aria-label="Add 15 seconds"
             className="rounded-md border border-line px-2 py-1 text-sm text-ink-soft hover:text-ink"
           >
             +15s

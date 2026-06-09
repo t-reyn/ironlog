@@ -308,6 +308,8 @@ create table if not exists feedback (
   custom_exercises jsonb,
   created_at timestamptz not null default now()
 );
+-- Dev-only triage flag: set true once the suggestion has shipped.
+alter table feedback add column if not exists addressed boolean not null default false;
 alter table feedback enable row level security;
 do $$
 begin
