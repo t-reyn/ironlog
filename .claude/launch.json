@@ -5,7 +5,7 @@
       "name": "ironlog-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--", "--port", "3200"],
-      "cwd": "C:\\Users\\reyno\\Documents\\Claude Code\\ironlog",
+      "cwd": "C:\\Users\\reyno\\Documents\\Claude Code\\shojin",
       "port": 3200,
       "autoPort": false
     }

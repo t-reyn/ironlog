@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { updateTemplate, type TemplateWithSets } from "@/lib/db";
 import { MUSCLE_COLORS } from "@/lib/muscles";
-import { ExerciseFigure } from "./ExerciseFigure";
+import { ExerciseIcon } from "./ExerciseIcon";
 import { ExercisePicker } from "./ExercisePicker";
 
 interface EditSet { weight: number; reps: number; }
@@ -117,7 +117,7 @@ export function TemplateEditor({
                 <div key={`${ex.exerciseId}-${exIdx}`} className="mb-3 rounded-xl border border-line bg-night/60 p-3">
                   <div className="mb-2 flex items-center gap-2">
                     <span style={{ color: MUSCLE_COLORS[meta?.muscle_group ?? "core"] }}>
-                      <ExerciseFigure pattern={meta?.movement_pattern ?? "other"} size={28} />
+                      <ExerciseIcon name={meta?.name} pattern={meta?.movement_pattern ?? "other"} size={28} />
                     </span>
                     <button
                       onClick={() => setSwappingIdx(exIdx)}

@@ -5,7 +5,7 @@ import { useStore } from "@/lib/store";
 import { saveTemplate } from "@/lib/db";
 import { toast } from "@/lib/toast";
 import { MUSCLE_COLORS } from "@/lib/muscles";
-import { ExerciseFigure } from "./ExerciseFigure";
+import { ExerciseIcon } from "./ExerciseIcon";
 import { ExercisePicker } from "./ExercisePicker";
 
 export function TemplateBuilder({
@@ -74,7 +74,7 @@ export function TemplateBuilder({
                       className="flex items-center gap-2 rounded-lg border border-line bg-night px-3 py-2"
                     >
                       <span style={{ color: MUSCLE_COLORS[ex?.muscle_group ?? "core"] }}>
-                        <ExerciseFigure pattern={ex?.movement_pattern ?? "other"} size={24} />
+                        <ExerciseIcon name={ex?.name} pattern={ex?.movement_pattern ?? "other"} size={24} />
                       </span>
                       <span className="flex-1 text-sm text-ink">{ex?.name ?? "?"}</span>
                       <button

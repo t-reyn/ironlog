@@ -6,7 +6,7 @@ import { deleteTemplate, type TemplateWithSets } from "@/lib/db";
 import { confirmDialog } from "@/lib/dialog";
 import { toast } from "@/lib/toast";
 import { MUSCLE_COLORS } from "@/lib/muscles";
-import { ExerciseFigure } from "./ExerciseFigure";
+import { ExerciseIcon } from "./ExerciseIcon";
 import { TemplateBuilder } from "./TemplateBuilder";
 import { TemplateEditor } from "./TemplateEditor";
 
@@ -229,7 +229,8 @@ export function StartModal({ onClose, onStart }: { onClose: () => void; onStart:
                                 return (
                                   <div key={id} className="flex items-center gap-1 text-xs text-ink-soft">
                                     <span style={{ color: MUSCLE_COLORS[ex?.muscle_group ?? "core"] }}>
-                                      <ExerciseFigure
+                                      <ExerciseIcon
+                                        name={ex?.name}
                                         pattern={ex?.movement_pattern ?? "other"}
                                         size={22}
                                       />

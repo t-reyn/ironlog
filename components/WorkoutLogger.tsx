@@ -6,7 +6,7 @@ import { saveTemplate } from "@/lib/db";
 import { MUSCLE_COLORS } from "@/lib/muscles";
 import { confirmDialog, promptDialog } from "@/lib/dialog";
 import { toast } from "@/lib/toast";
-import { ExerciseFigure } from "./ExerciseFigure";
+import { ExerciseIcon } from "./ExerciseIcon";
 import { ExercisePicker } from "./ExercisePicker";
 import { SetRow } from "./SetRow";
 import { Icon } from "./ShojinUI";
@@ -186,7 +186,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
               >
                 <div className="mb-2 flex items-center gap-3">
                   <span style={{ color: MUSCLE_COLORS[meta?.muscle_group ?? "core"] }}>
-                    <ExerciseFigure pattern={meta?.movement_pattern ?? "other"} size={34} />
+                    <ExerciseIcon name={meta?.name} pattern={meta?.movement_pattern ?? "other"} size={34} />
                   </span>
                   <button
                     onClick={() => setSwappingIdx(exIdx)}

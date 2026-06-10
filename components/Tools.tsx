@@ -17,7 +17,7 @@ import { toast } from "@/lib/toast";
 import { exportWorkoutsToCsv, downloadCsv } from "@/lib/csv";
 import { estimateOneRepMax, round1 } from "@/lib/oneRepMax";
 import { MUSCLE_COLORS } from "@/lib/muscles";
-import { ExerciseFigure } from "./ExerciseFigure";
+import { ExerciseIcon } from "./ExerciseIcon";
 import { TemplateBuilder } from "./TemplateBuilder";
 import { TemplateEditor } from "./TemplateEditor";
 import { Icon } from "./ShojinUI";
@@ -306,7 +306,7 @@ export function Tools({ userEmail }: { userEmail: string }) {
                             return (
                               <div key={id} className="flex items-center gap-1 text-xs text-ink-soft">
                                 <span style={{ color: MUSCLE_COLORS[ex?.muscle_group ?? "core"] }}>
-                                  <ExerciseFigure pattern={ex?.movement_pattern ?? "other"} size={20} />
+                                  <ExerciseIcon name={ex?.name} pattern={ex?.movement_pattern ?? "other"} size={20} />
                                 </span>
                                 <span>
                                   {ex?.name ?? "?"}{" "}
@@ -510,7 +510,7 @@ export function Tools({ userEmail }: { userEmail: string }) {
               >
                 <div className="flex items-center gap-2">
                   <span style={{ color: MUSCLE_COLORS[ex.muscle_group] }}>
-                    <ExerciseFigure pattern={ex.movement_pattern} size={20} />
+                    <ExerciseIcon name={ex.name} pattern={ex.movement_pattern} size={20} />
                   </span>
                   <div>
                     <span className="text-sm text-ink">{ex.name}</span>

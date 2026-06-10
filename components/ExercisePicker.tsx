@@ -9,12 +9,21 @@ import {
   PATTERN_LABELS,
 } from "@/lib/muscles";
 import { ALL_MUSCLE_GROUPS, type MovementPattern, type MuscleGroup } from "@/lib/types";
-import { ExerciseFigure } from "./ExerciseFigure";
+import { ExerciseIcon } from "./ExerciseIcon";
 
 const PATTERNS: MovementPattern[] = [
   "squat", "hinge", "lunge", "horizontal_press", "vertical_press",
   "horizontal_pull", "vertical_pull", "curl", "triceps_extension", "core", "calf", "other",
 ];
+
+function SearchGlyph() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-ink-faint">
+      <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+      <path d="M16.5 16.5 21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export function ExercisePicker({
   onPick,
@@ -36,8 +45,10 @@ export function ExercisePicker({
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return exercises;
-    return exercises.filter((e) => e.name.toLowerCase().includes(term));
+    const list = term
+      ? exercises.filter((e) => e.name.toLowerCase().includes(term))
+      : exercises;
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [exercises, q]);
 
   async function create() {
@@ -58,18 +69,27 @@ export function ExercisePicker({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-surface">
-      {/* Search bar — always visible at top */}
-      <div className="flex items-center gap-2 border-b border-line p-3 pt-safe">
-        <input
-          autoFocus
-          value={q}
-          onChange={(e) => { setQ(e.target.value); if (creating) setCreating(false); }}
-          placeholder="Search exercises…"
-          className="flex-1 rounded-lg border border-line bg-night px-3 py-2 text-ink outline-none focus:border-ember"
-        />
-        <button onClick={onClose} aria-label="Close" className="px-2 text-ink-faint hover:text-ink">
-          ✕
+    <div className="fixed inset-0 z-50 flex flex-col bg-night">
+      {/* Search header — fixed, non-scrolling */}
+      <div className="flex shrink-0 items-center gap-3 px-[18px] pb-3 pt-safe">
+        <div className="flex h-12 flex-1 items-center gap-[11px] rounded-2xl border-[1.5px] border-amber bg-surface px-4">
+          <SearchGlyph />
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => { setQ(e.target.value); if (creating) setCreating(false); }}
+            placeholder="Search exercises…"
+            className="min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none placeholder:text-ink-faint"
+          />
+        </div>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="flex h-[30px] w-[30px] items-center justify-center text-ink-faint hover:text-ink"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
         </button>
       </div>
 
@@ -80,13 +100,13 @@ export function ExercisePicker({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Exercise name"
-            className="rounded-lg border border-line bg-night px-3 py-2 outline-none focus:border-ember"
+            className="rounded-lg border border-line bg-surface px-3 py-2 outline-none focus:border-ember"
           />
           <label className="text-sm text-ink-soft">Muscle group</label>
           <select
             value={mg}
             onChange={(e) => setMg(e.target.value as MuscleGroup)}
-            className="rounded-lg border border-line bg-night px-3 py-2"
+            className="rounded-lg border border-line bg-surface px-3 py-2"
           >
             {ALL_MUSCLE_GROUPS.map((g) => (
               <option key={g} value={g}>
@@ -98,7 +118,7 @@ export function ExercisePicker({
           <select
             value={pattern}
             onChange={(e) => setPattern(e.target.value as MovementPattern)}
-            className="rounded-lg border border-line bg-night px-3 py-2"
+            className="rounded-lg border border-line bg-surface px-3 py-2"
           >
             {PATTERNS.map((p) => (
               <option key={p} value={p}>
@@ -124,20 +144,31 @@ export function ExercisePicker({
         </div>
       ) : (
         <>
-          <ul className="flex-1 overflow-y-auto p-2">
+          <ul className="flex-1 divide-y divide-line-2 overflow-y-auto">
             {filtered.map((e) => (
               <li key={e.id}>
                 <button
                   onClick={() => onPick(e.id)}
-                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-surface-2"
+                  className="flex w-full items-center gap-[15px] px-5 py-2.5 text-left hover:bg-surface-2"
                 >
-                  <span style={{ color: MUSCLE_COLORS[e.muscle_group] }}>
-                    <ExerciseFigure pattern={e.movement_pattern} size={32} />
+                  <span
+                    className="flex h-10 w-10 shrink-0 items-center justify-center"
+                    style={{ color: MUSCLE_COLORS[e.muscle_group] }}
+                  >
+                    <ExerciseIcon name={e.name} pattern={e.movement_pattern} size={40} sw={2.3} />
                   </span>
-                  <span className="flex-1">
-                    <span className="block text-ink">{e.name}</span>
-                    <span className="block text-xs text-ink-faint">
-                      {MUSCLE_LABELS[e.muscle_group]} · {e.equipment}
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className="block truncate text-[16.5px] font-semibold leading-tight text-ink"
+                      style={{ letterSpacing: "-0.01em" }}
+                    >
+                      {e.name}
+                    </span>
+                    <span className="mt-0.5 block text-[13px] text-ink-faint">
+                      <span className="font-semibold" style={{ color: MUSCLE_COLORS[e.muscle_group] }}>
+                        {MUSCLE_LABELS[e.muscle_group]}
+                      </span>{" "}
+                      · {e.equipment}
                       {e.is_custom ? " · custom" : ""}
                     </span>
                   </span>
@@ -145,18 +176,18 @@ export function ExercisePicker({
               </li>
             ))}
             {filtered.length === 0 && (
-              <li className="p-3 text-sm text-ink-faint">No matches.</li>
+              <li className="p-5 text-sm text-ink-faint">No matches.</li>
             )}
           </ul>
-          <div className="border-t border-line p-3 pb-safe">
+          <div className="shrink-0 border-t border-line pb-safe pt-[18px] text-center">
             <button
               onClick={() => {
                 setName(q);
                 setCreating(true);
               }}
-              className="w-full rounded-lg border border-line py-2 text-sm text-ink-soft hover:text-ink"
+              className="pb-4 text-[16px] font-semibold text-ink-soft hover:text-ink"
             >
-              + Create custom exercise
+              <span className="mr-1.5 font-bold text-amber">+</span>Create custom exercise
             </button>
           </div>
         </>
