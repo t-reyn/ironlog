@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { saveTemplate } from "@/lib/db";
 import { MUSCLE_COLORS } from "@/lib/muscles";
@@ -31,6 +31,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const [picking, setPicking] = useState(false);
   const [swappingIdx, setSwappingIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
     (n, ex) => n + ex.sets.filter((s) => s.done).length,
     0,
   );
+  const totalSets = draft.exercises.reduce((n, ex) => n + ex.sets.length, 0);
 
   async function saveAsTemplate() {
     if (!draft) return;
@@ -62,14 +64,13 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
       confirmLabel: "Save template",
     });
     if (!name) return;
-    const sets = draft.exercises.flatMap((ex) =>
-      ex.sets.map((s, idx) => ({
-        exercise_id: ex.exerciseId,
-        set_index: idx,
-        weight: s.weight,
-        reps: s.reps,
-      })),
-    );
+    const sets = draft.exercises
+      .flatMap((ex) =>
+        ex.sets
+          .filter((s) => !s.isWarmup)
+          .map((s) => ({ exercise_id: ex.exerciseId, weight: s.weight, reps: s.reps })),
+      )
+      .map((s, set_index) => ({ ...s, set_index }));
     setSaving(true);
     try {
       await saveTemplate({ name, sets });
@@ -105,6 +106,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
 
   async function onFinish() {
     if (!draft) return;
+    if (savingRef.current) return; // guard against double-tap saving twice
     const isEdit = !!draft.workoutId;
     if (completedSets === 0) {
       const ok = await confirmDialog({
@@ -121,6 +123,21 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
       onClose();
       return;
     }
+    if (completedSets < totalSets) {
+      const dropped = totalSets - completedSets;
+      const plural = dropped !== 1 ? "s" : "";
+      const ok = await confirmDialog({
+        title: isEdit ? "Save with sets removed?" : "Finish incomplete workout?",
+        message: isEdit
+          ? `${dropped} set${plural} aren't marked complete and will be removed from this workout.`
+          : `${dropped} set${plural} aren't marked complete and won't be saved.`,
+        confirmLabel: isEdit ? "Save anyway" : "Finish anyway",
+        cancelLabel: "Keep editing",
+        danger: isEdit,
+      });
+      if (!ok) return;
+    }
+    savingRef.current = true;
     setSaving(true);
     try {
       await finish();
@@ -128,9 +145,14 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
       onClose();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast.error(`Couldn't save — your sets are safe, nothing was lost. ${msg}`);
+      toast.error(
+        isEdit
+          ? `Couldn't save — your workout is unchanged. Tap Save to retry. ${msg}`
+          : `Couldn't save — your sets are safe, nothing was lost. ${msg}`,
+      );
     } finally {
       setSaving(false);
+      savingRef.current = false;
     }
   }
 
@@ -224,7 +246,14 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
                 </div>
 
                 {ex.sets.map((set, setIdx) => (
-                  <SetRow key={setIdx} exIdx={exIdx} setIdx={setIdx} set={set} unit={exUnit} />
+                  <SetRow
+                    key={setIdx}
+                    exIdx={exIdx}
+                    setIdx={setIdx}
+                    exerciseId={ex.exerciseId}
+                    set={set}
+                    unit={exUnit}
+                  />
                 ))}
 
                 <button
@@ -290,7 +319,8 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
           )}
           <button
             onClick={onDiscard}
-            className="rounded-full border border-line px-3 py-3 text-sm text-ink-faint hover:border-danger/50 hover:text-danger-soft"
+            disabled={saving}
+            className="rounded-full border border-line px-3 py-3 text-sm text-ink-faint hover:border-danger/50 hover:text-danger-soft disabled:opacity-50"
           >
             Discard
           </button>

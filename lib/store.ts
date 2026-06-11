@@ -40,6 +40,7 @@ interface StoreState {
   // server data
   loaded: boolean;
   exercises: Exercise[];
+  exercisesById: Map<string, Exercise>;
   workouts: WorkoutWithSets[];
   templates: TemplateWithSets[];
   bodyweight: BodyweightEntry[];
@@ -52,6 +53,7 @@ interface StoreState {
   rest: RestState;
 
   hydrate: () => Promise<void>;
+  reset: () => void;
   refreshWorkouts: () => Promise<void>;
   refreshTemplates: () => Promise<void>;
   refreshBodyweight: () => Promise<void>;
@@ -72,12 +74,16 @@ interface StoreState {
   addDraftSet: (exIdx: number) => void;
   updateDraftSet: (exIdx: number, setIdx: number, patch: Partial<DraftSetEntry>) => void;
   removeDraftSet: (exIdx: number, setIdx: number) => void;
-  insertDraftSet: (exIdx: number, setIdx: number, set: DraftSetEntry) => void;
+  // Identity-based so a delayed Undo lands in the right exercise even if the
+  // draft has changed (e.g. another exercise above was removed) since the set
+  // was removed. Returns false (no-op) if that exercise is no longer present.
+  insertDraftSet: (exerciseId: string, setIdx: number, set: DraftSetEntry) => boolean;
   discardDraft: () => void;
   finishWorkout: () => Promise<void>;
 
   // timer
   startRest: (seconds: number) => void;
+  adjustRest: (deltaSeconds: number) => void;
   stopRest: () => void;
 
   // helpers
@@ -88,6 +94,7 @@ interface StoreState {
 export const useStore = create<StoreState>((set, get) => ({
   loaded: false,
   exercises: [],
+  exercisesById: new Map(),
   workouts: [],
   templates: [],
   bodyweight: [],
@@ -108,12 +115,21 @@ export const useStore = create<StoreState>((set, get) => ({
     let savedDraft: Draft | null = null;
     try {
       const raw = localStorage.getItem("ironlog-draft");
-      if (raw) savedDraft = JSON.parse(raw) as Draft;
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        savedDraft = isValidDraft(parsed) ? parsed : null;
+      }
     } catch {}
+    // A draft that failed validation (corrupt / wrong shape) would crash the app
+    // on every launch — drop it so we recover instead of bricking.
+    if (!savedDraft) {
+      try { localStorage.removeItem("ironlog-draft"); } catch {}
+    }
 
     set({
       profile,
       exercises,
+      exercisesById: new Map(exercises.map((e) => [e.id, e])),
       workouts,
       templates,
       bodyweight,
@@ -123,106 +139,112 @@ export const useStore = create<StoreState>((set, get) => ({
     });
   },
 
+  // Wipe all in-memory state and any persisted draft. Called on sign-out so the
+  // next user never sees the previous user's data (or inherits their draft).
+  reset: () => {
+    try { localStorage.removeItem("ironlog-draft"); } catch {}
+    set({
+      loaded: false,
+      exercises: [],
+      exercisesById: new Map(),
+      workouts: [],
+      templates: [],
+      bodyweight: [],
+      profile: null,
+      draft: null,
+      rest: { endsAt: null, duration: 90 },
+    });
+  },
+
   refreshWorkouts: async () => set({ workouts: await db.listWorkouts() }),
   refreshTemplates: async () => set({ templates: await db.listTemplates() }),
   refreshBodyweight: async () => set({ bodyweight: await db.listBodyweight() }),
-  refreshExercises: async () => set({ exercises: await db.listExercises() }),
+  refreshExercises: async () => {
+    const exercises = await db.listExercises();
+    set({ exercises, exercisesById: new Map(exercises.map((e) => [e.id, e])) });
+  },
 
   startBlank: () =>
     set({ draft: { name: "Workout", startedAt: Date.now(), exercises: [] } }),
 
+  // Group by *contiguous runs* of matching exercise_id (after sorting by
+  // set_index), not by a Map keyed on exercise_id — the same exercise can
+  // appear in separate, non-adjacent groups (e.g. supersets), and merging all
+  // of its sets into one group would scramble the original order.
   startFromTemplate: (t) => {
     const defaultUnit = get().profile?.unit ?? "kg";
-    const byExercise = new Map<string, DraftSetEntry[]>();
-    const order: string[] = [];
-    for (const s of [...t.sets].sort((a, b) => a.set_index - b.set_index)) {
-      if (!byExercise.has(s.exercise_id)) {
-        byExercise.set(s.exercise_id, []);
-        order.push(s.exercise_id);
-      }
-      byExercise.get(s.exercise_id)!.push({
+    const sorted = [...t.sets].sort((a, b) => a.set_index - b.set_index);
+    const exercises: DraftExercise[] = [];
+    for (const s of sorted) {
+      const last = exercises[exercises.length - 1];
+      const setEntry: DraftSetEntry = {
         weight: s.weight,
         reps: s.reps,
         done: false,
         isWarmup: false,
         rpe: null,
-      });
+      };
+      if (last && last.exerciseId === s.exercise_id) {
+        last.sets.push(setEntry);
+      } else {
+        exercises.push({ exerciseId: s.exercise_id, unit: defaultUnit, notes: "", sets: [setEntry] });
+      }
     }
-    set({
-      draft: {
-        name: t.name,
-        startedAt: Date.now(),
-        exercises: order.map((exerciseId) => ({
-          exerciseId,
-          unit: defaultUnit,
-          sets: byExercise.get(exerciseId)!,
-          notes: "",
-        })),
-      },
-    });
+    set({ draft: { name: t.name, startedAt: Date.now(), exercises } });
   },
 
   startFromWorkout: (w) => {
     const defaultUnit = get().profile?.unit ?? "kg";
-    const byExercise = new Map<string, { unit: "kg" | "lb"; notes: string; sets: DraftSetEntry[] }>();
-    const order: string[] = [];
-    for (const s of [...w.sets].filter((s) => s.completed).sort((a, b) => a.set_index - b.set_index)) {
-      if (!byExercise.has(s.exercise_id)) {
-        byExercise.set(s.exercise_id, { unit: s.unit ?? defaultUnit, notes: s.notes ?? "", sets: [] });
-        order.push(s.exercise_id);
-      }
-      byExercise.get(s.exercise_id)!.sets.push({
+    const sorted = [...w.sets].filter((s) => s.completed).sort((a, b) => a.set_index - b.set_index);
+    const exercises: DraftExercise[] = [];
+    for (const s of sorted) {
+      const last = exercises[exercises.length - 1];
+      const setEntry: DraftSetEntry = {
         weight: s.weight,
         reps: s.reps,
         done: false,
         isWarmup: s.is_warmup,
         rpe: null,
-      });
+      };
+      if (last && last.exerciseId === s.exercise_id) {
+        last.sets.push(setEntry);
+      } else {
+        exercises.push({
+          exerciseId: s.exercise_id,
+          unit: s.unit ?? defaultUnit,
+          notes: s.notes ?? "",
+          sets: [setEntry],
+        });
+      }
     }
-    set({
-      draft: {
-        name: w.name,
-        startedAt: Date.now(),
-        exercises: order.map((exerciseId) => ({
-          exerciseId,
-          unit: byExercise.get(exerciseId)!.unit,
-          sets: byExercise.get(exerciseId)!.sets,
-          notes: byExercise.get(exerciseId)!.notes,
-        })),
-      },
-    });
+    set({ draft: { name: w.name, startedAt: Date.now(), exercises } });
   },
 
   startEdit: (w) => {
     const defaultUnit = get().profile?.unit ?? "kg";
-    const byExercise = new Map<string, { unit: "kg" | "lb"; notes: string; sets: DraftSetEntry[] }>();
-    const order: string[] = [];
-    for (const s of [...w.sets].sort((a, b) => a.set_index - b.set_index)) {
-      if (!byExercise.has(s.exercise_id)) {
-        byExercise.set(s.exercise_id, { unit: s.unit ?? defaultUnit, notes: s.notes ?? "", sets: [] });
-        order.push(s.exercise_id);
-      }
-      byExercise.get(s.exercise_id)!.sets.push({
+    const sorted = [...w.sets].sort((a, b) => a.set_index - b.set_index);
+    const exercises: DraftExercise[] = [];
+    for (const s of sorted) {
+      const last = exercises[exercises.length - 1];
+      const setEntry: DraftSetEntry = {
         weight: s.weight,
         reps: s.reps,
         done: s.completed,
         isWarmup: s.is_warmup,
-        rpe: s.rpe ?? null,
-      });
+        rpe: normalizeRpe(s.rpe),
+      };
+      if (last && last.exerciseId === s.exercise_id) {
+        last.sets.push(setEntry);
+      } else {
+        exercises.push({
+          exerciseId: s.exercise_id,
+          unit: s.unit ?? defaultUnit,
+          notes: s.notes ?? "",
+          sets: [setEntry],
+        });
+      }
     }
-    set({
-      draft: {
-        name: w.name,
-        startedAt: Date.now(),
-        workoutId: w.id,
-        exercises: order.map((exerciseId) => ({
-          exerciseId,
-          unit: byExercise.get(exerciseId)!.unit,
-          sets: byExercise.get(exerciseId)!.sets,
-          notes: byExercise.get(exerciseId)!.notes,
-        })),
-      },
-    });
+    set({ draft: { name: w.name, startedAt: Date.now(), workoutId: w.id, exercises } });
   },
 
   setDraftName: (name) => {
@@ -347,16 +369,19 @@ export const useStore = create<StoreState>((set, get) => ({
     set({ draft: { ...draft, exercises } });
   },
 
-  insertDraftSet: (exIdx, setIdx, setEntry) => {
+  insertDraftSet: (exerciseId, setIdx, setEntry) => {
     const draft = get().draft;
-    if (!draft) return;
+    if (!draft) return false;
+    const exIdx = draft.exercises.findIndex((ex) => ex.exerciseId === exerciseId);
+    if (exIdx === -1) return false;
     const exercises = draft.exercises.map((ex, i) => {
       if (i !== exIdx) return ex;
       const sets = [...ex.sets];
-      sets.splice(setIdx, 0, setEntry);
+      sets.splice(Math.min(setIdx, sets.length), 0, setEntry);
       return { ...ex, sets };
     });
     set({ draft: { ...draft, exercises } });
+    return true;
   },
 
   discardDraft: () => set({ draft: null, rest: { ...get().rest, endsAt: null } }),
@@ -364,23 +389,25 @@ export const useStore = create<StoreState>((set, get) => ({
   finishWorkout: async () => {
     const draft = get().draft;
     if (!draft) return;
-    const sets: db.DraftSet[] = [];
-    for (const ex of draft.exercises) {
-      const note = ex.notes?.trim() || null;
-      ex.sets.forEach((s, idx) => {
-        if (!s.done) return;
-        sets.push({
-          exercise_id: ex.exerciseId,
-          set_index: idx,
-          weight: s.weight,
-          reps: s.reps,
-          rpe: s.rpe ?? null,
-          is_warmup: s.isWarmup,
-          unit: ex.unit,
-          notes: note,
-        });
-      });
-    }
+    // set_index is a single running counter across the whole workout (not
+    // per-exercise) so the same exercise can appear in multiple, separately
+    // ordered groups (e.g. supersets) without their sets colliding on reload.
+    const sets: db.DraftSet[] = draft.exercises
+      .flatMap((ex) => {
+        const note = ex.notes?.trim() || null;
+        return ex.sets
+          .filter((s) => s.done)
+          .map((s) => ({
+            exercise_id: ex.exerciseId,
+            weight: s.weight,
+            reps: s.reps,
+            rpe: s.rpe ?? null,
+            is_warmup: s.isWarmup,
+            unit: ex.unit,
+            notes: note,
+          }));
+      })
+      .map((s, set_index) => ({ ...s, set_index }));
     if (draft.workoutId) {
       await db.updateWorkout(draft.workoutId, draft.name, sets);
     } else {
@@ -397,12 +424,44 @@ export const useStore = create<StoreState>((set, get) => ({
 
   startRest: (seconds) =>
     set({ rest: { endsAt: Date.now() + seconds * 1000, duration: seconds } }),
+  // Nudge only the end time (min 5s remaining); the session default `duration`
+  // is left untouched so the ±15s buttons don't reset future rest lengths.
+  adjustRest: (deltaSeconds) => {
+    const { rest } = get();
+    if (rest.endsAt === null) return;
+    const endsAt = Math.max(Date.now() + 5000, rest.endsAt + deltaSeconds * 1000);
+    set({ rest: { ...rest, endsAt } });
+  },
   stopRest: () => set({ rest: { ...get().rest, endsAt: null } }),
 
-  muscleOf: (exerciseId) =>
-    get().exercises.find((e) => e.id === exerciseId)?.muscle_group,
-  exerciseById: (id) => get().exercises.find((e) => e.id === id),
+  muscleOf: (exerciseId) => get().exercisesById.get(exerciseId)?.muscle_group,
+  exerciseById: (id) => get().exercisesById.get(id),
 }));
+
+// SetRow's RPE picker only offers "<5" (stored as 5) through 10. Older sets
+// saved with 1-4 or half-steps (e.g. 7.5) match no option and would render as
+// blank; snap them into the current scale on read so editing always shows a
+// value (this doesn't touch the stored row unless the set is re-saved).
+function normalizeRpe(rpe: number | null | undefined): number | null {
+  if (rpe == null) return null;
+  if (rpe < 5) return 5;
+  return Math.min(10, Math.round(rpe));
+}
+
+// Guard a persisted value before adopting it as the active draft. A parseable
+// but wrong-shaped value (truncated write, schema drift) would otherwise crash
+// render on every launch. Edit drafts (workoutId) are never persisted, so a
+// stored one is stale and rejected.
+function isValidDraft(v: unknown): v is Draft {
+  if (typeof v !== "object" || v === null) return false;
+  const d = v as Record<string, unknown>;
+  return (
+    typeof d.name === "string" &&
+    typeof d.startedAt === "number" &&
+    Array.isArray(d.exercises) &&
+    d.workoutId === undefined
+  );
+}
 
 // Persist new-workout drafts across app close/reopen.
 // Edit drafts (workoutId present) are never persisted — they are ephemeral.

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { hasSupabase, supabase } from "@/lib/supabase";
+import { useStore } from "@/lib/store";
 import { Login } from "./Login";
 import { AppShell } from "./AppShell";
 import { SetupNotice } from "./SetupNotice";
@@ -17,7 +18,10 @@ export function AppGate() {
       setSession(data.session);
       setReady(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      // Clear the previous user's in-memory data + persisted draft so the next
+      // sign-in on this device starts clean.
+      if (event === "SIGNED_OUT") useStore.getState().reset();
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();

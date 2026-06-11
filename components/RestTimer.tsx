@@ -2,34 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
-
-function beep() {
-  try {
-    const Ctx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    const ctx = new Ctx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "sine";
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.5);
-    osc.onended = () => ctx.close();
-  } catch {
-    /* audio not available — visual flash still fires */
-  }
-}
+import { playBeep } from "@/lib/audio";
 
 export function RestTimer({ bottomOffset }: { bottomOffset?: string } = {}) {
   const rest = useStore((s) => s.rest);
-  const startRest = useStore((s) => s.startRest);
+  const adjustRest = useStore((s) => s.adjustRest);
   const stopRest = useStore((s) => s.stopRest);
   // Lazy init seeds the clock once at mount; the interval below keeps it fresh.
   const [now, setNow] = useState(() => Date.now());
@@ -50,7 +27,7 @@ export function RestTimer({ bottomOffset }: { bottomOffset?: string } = {}) {
   useEffect(() => {
     if (done && !beepedRef.current) {
       beepedRef.current = true;
-      beep();
+      playBeep();
       const id = setTimeout(() => stopRest(), 2500);
       return () => clearTimeout(id);
     }
@@ -79,14 +56,14 @@ export function RestTimer({ bottomOffset }: { bottomOffset?: string } = {}) {
           </div>
           <div className="flex-1" />
           <button
-            onClick={() => startRest(Math.max(5, remaining - 15))}
+            onClick={() => adjustRest(-15)}
             aria-label="Subtract 15 seconds"
             className="rounded-md border border-line px-2 py-1 text-sm text-ink-soft hover:text-ink"
           >
             −15s
           </button>
           <button
-            onClick={() => startRest(remaining + 15)}
+            onClick={() => adjustRest(15)}
             aria-label="Add 15 seconds"
             className="rounded-md border border-line px-2 py-1 text-sm text-ink-soft hover:text-ink"
           >
@@ -104,8 +81,8 @@ export function RestTimer({ bottomOffset }: { bottomOffset?: string } = {}) {
           <div
             className="h-full transition-[width] duration-200"
             style={{
-              width: `${done ? 0 : pct}%`,
-              backgroundColor: pct > 40 ? "var(--color-ember)" : pct > 15 ? "#f59e0b" : "#ef4444",
+              width: `${done ? 0 : Math.min(100, pct)}%`,
+              backgroundColor: pct > 40 ? "var(--color-ember)" : pct > 15 ? "var(--color-warn)" : "var(--color-danger)",
             }}
           />
         </div>

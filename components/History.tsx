@@ -5,12 +5,14 @@ import { useStore } from "@/lib/store";
 import { deleteWorkout } from "@/lib/db";
 import { confirmDialog } from "@/lib/dialog";
 import { toast } from "@/lib/toast";
+import { convertWeight } from "@/lib/units";
 import { Eyebrow, Icon } from "./ShojinUI";
 
 function fmtDuration(s: number | null) {
   if (!s) return null;
-  if (s < 3600) return `${Math.round(s / 60)} min`;
-  return `${Math.floor(s / 3600)}h ${Math.round((s % 3600) / 60)}m`;
+  const mins = Math.round(s / 60);
+  if (mins < 60) return `${mins} min`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 function fmtK(v: number): string {
   if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
@@ -23,6 +25,7 @@ export function History({ onStart, onNew }: { onStart: () => void; onNew: () => 
   const startEdit = useStore((s) => s.startEdit);
   const startFromWorkout = useStore((s) => s.startFromWorkout);
   const draft = useStore((s) => s.draft);
+  const unit = useStore((s) => s.profile?.unit ?? "kg");
   const refreshWorkouts = useStore((s) => s.refreshWorkouts);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -35,7 +38,7 @@ export function History({ onStart, onNew }: { onStart: () => void; onNew: () => 
         const exerciseNames: string[] = [];
         let volume = 0;
         for (const s of w.sets) {
-          if (!s.is_warmup) volume += s.weight * s.reps;
+          if (!s.is_warmup) volume += convertWeight(s.weight, s.unit ?? "kg", unit) * s.reps;
           if (!seen.has(s.exercise_id)) {
             seen.add(s.exercise_id);
             const ex = exMap.get(s.exercise_id);
@@ -55,7 +58,7 @@ export function History({ onStart, onNew }: { onStart: () => void; onNew: () => 
       });
     const totalVolume = allWorkouts.reduce((sum, w) => sum + w.volume, 0);
     return { allWorkouts, totalVolume };
-  }, [workouts, exercises]);
+  }, [workouts, exercises, unit]);
 
   async function withReplaceGuard(action: () => void) {
     if (draft) {
@@ -122,7 +125,7 @@ export function History({ onStart, onNew }: { onStart: () => void; onNew: () => 
         <>
           <div className="flex items-center justify-between">
             <Eyebrow>{allWorkouts.length} SESSIONS</Eyebrow>
-            <div className="font-mono text-xs text-ink-soft">{fmtK(totalVolume)} kg total</div>
+            <div className="font-mono text-xs text-ink-soft">{fmtK(totalVolume)} {unit} total</div>
           </div>
 
           <ul className="flex flex-col gap-3">
@@ -147,7 +150,7 @@ export function History({ onStart, onNew }: { onStart: () => void; onNew: () => 
                     </div>
                     <div className="text-right">
                       <div className="font-mono text-sm font-semibold text-ink">{fmtK(w.volume)}</div>
-                      <div className="rp-eyebrow" style={{ fontSize: 9 }}>KG</div>
+                      <div className="rp-eyebrow" style={{ fontSize: 9 }}>{unit.toUpperCase()}</div>
                     </div>
                   </div>
 

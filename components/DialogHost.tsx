@@ -55,12 +55,11 @@ export function DialogHost() {
           />
         ) : (
           <div className="mt-5 flex justify-end gap-2">
-            <button
+            <CancelButton
+              autoFocus={active.danger}
+              label={active.cancelLabel}
               onClick={() => close(false)}
-              className="rounded-lg border border-line px-4 py-2 text-sm text-ink-soft hover:text-ink"
-            >
-              {active.cancelLabel}
-            </button>
+            />
             <ConfirmButton
               danger={active.danger}
               label={active.confirmLabel}
@@ -70,6 +69,30 @@ export function DialogHost() {
         )}
       </div>
     </div>
+  );
+}
+
+function CancelButton({
+  label,
+  autoFocus,
+  onClick,
+}: {
+  label: string;
+  autoFocus: boolean;
+  onClick: () => void;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (autoFocus) ref.current?.focus();
+  }, [autoFocus]);
+  return (
+    <button
+      ref={ref}
+      onClick={onClick}
+      className="rounded-lg border border-line px-4 py-2 text-sm text-ink-soft hover:text-ink"
+    >
+      {label}
+    </button>
   );
 }
 
@@ -83,9 +106,11 @@ function ConfirmButton({
   onClick: () => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
+  // For destructive dialogs, focus stays on Cancel so a stray Enter/Space can't
+  // confirm; only auto-focus the confirm button on non-danger prompts.
   useEffect(() => {
-    ref.current?.focus();
-  }, []);
+    if (!danger) ref.current?.focus();
+  }, [danger]);
   return (
     <button
       ref={ref}

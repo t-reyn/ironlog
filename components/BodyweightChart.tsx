@@ -12,6 +12,9 @@ import {
 } from "recharts";
 import { useStore } from "@/lib/store";
 import { upsertBodyweight, deleteBodyweight } from "@/lib/db";
+import { toast } from "@/lib/toast";
+import { convertWeight } from "@/lib/units";
+import { round1 } from "@/lib/oneRepMax";
 
 export function BodyweightChart() {
   const entries = useStore((s) => s.bodyweight);
@@ -26,13 +29,20 @@ export function BodyweightChart() {
     try {
       await deleteBodyweight(id);
       await refresh();
+    } catch {
+      toast.error("Couldn't delete entry. Try again.");
     } finally {
       setDeleting(null);
     }
   }
 
-  const data = entries.map((e) => ({ date: e.logged_on, weight: e.weight }));
-  const latest = entries[entries.length - 1]?.weight;
+  // Each entry carries the unit it was logged in; convert to the profile's
+  // current unit so a unit change doesn't relabel old values in place.
+  const data = entries.map((e) => ({
+    date: e.logged_on,
+    weight: round1(convertWeight(e.weight, e.unit, unit)),
+  }));
+  const latest = data[data.length - 1]?.weight;
 
   async function add() {
     const w = parseFloat(value);
@@ -42,6 +52,8 @@ export function BodyweightChart() {
       await upsertBodyweight(w, unit);
       await refresh();
       setValue("");
+    } catch {
+      toast.error("Couldn't log weight. Try again.");
     } finally {
       setBusy(false);
     }
@@ -59,23 +71,27 @@ export function BodyweightChart() {
             "No entries yet"
           )}
         </span>
-        <div className="ml-auto flex gap-2">
+        <form
+          className="ml-auto flex gap-2"
+          onSubmit={(e) => { e.preventDefault(); add(); }}
+        >
           <input
             type="number"
             inputMode="decimal"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={`Today (${unit})`}
+            aria-label={`Today's bodyweight in ${unit}`}
             className="w-28 rounded-md border border-line bg-night px-2 py-1 text-right outline-none focus:border-ember"
           />
           <button
-            onClick={add}
+            type="submit"
             disabled={busy}
             className="rounded-md bg-ember px-3 py-1 text-sm font-medium text-on-accent disabled:opacity-60"
           >
             Log
           </button>
-        </div>
+        </form>
       </div>
 
       {data.length > 0 ? (
@@ -122,10 +138,11 @@ export function BodyweightChart() {
           {[...entries].reverse().map((e) => (
             <li key={e.id} className="flex items-center justify-between border-t border-line py-1.5 text-sm">
               <span className="text-ink-faint">{e.logged_on}</span>
-              <span className="text-ink">{e.weight} {unit}</span>
+              <span className="text-ink">{round1(convertWeight(e.weight, e.unit, unit))} {unit}</span>
               <button
                 onClick={() => remove(e.id)}
                 disabled={deleting === e.id}
+                aria-label={`Delete entry for ${e.logged_on}`}
                 className="ml-4 text-ink-faint hover:text-ember-soft disabled:opacity-40"
                 title="Delete entry"
               >

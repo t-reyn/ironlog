@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { createCustomExercise } from "@/lib/db";
+import { toast } from "@/lib/toast";
 import {
   MUSCLE_LABELS,
   MUSCLE_COLORS,
@@ -15,6 +16,8 @@ const PATTERNS: MovementPattern[] = [
   "squat", "hinge", "lunge", "horizontal_press", "vertical_press",
   "horizontal_pull", "vertical_pull", "curl", "triceps_extension", "core", "calf", "other",
 ];
+
+const EQUIPMENT_OPTIONS = ["barbell", "dumbbell", "cable", "machine", "bodyweight", "other"];
 
 function SearchGlyph() {
   return (
@@ -41,12 +44,15 @@ export function ExercisePicker({
   const [name, setName] = useState("");
   const [mg, setMg] = useState<MuscleGroup>("chest");
   const [pattern, setPattern] = useState<MovementPattern>("horizontal_press");
+  const [equipment, setEquipment] = useState("barbell");
   const [busy, setBusy] = useState(false);
 
   const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase();
+    const term = norm(q);
     const list = term
-      ? exercises.filter((e) => e.name.toLowerCase().includes(term))
+      ? exercises.filter((e) => norm(e.name).includes(term))
       : exercises;
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [exercises, q]);
@@ -59,29 +65,35 @@ export function ExercisePicker({
         name: name.trim(),
         muscle_group: mg,
         movement_pattern: pattern,
-        equipment: "other",
+        equipment,
       });
       await refreshExercises();
       onPick(created.id);
+    } catch {
+      toast.error("Couldn't create exercise — you may already have one with this name.");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-night">
+    <div className="fixed inset-0 z-[55] flex flex-col bg-night">
       {/* Search header — fixed, non-scrolling */}
-      <div className="flex shrink-0 items-center gap-3 px-[18px] pb-3 pt-safe">
-        <div className="flex h-12 flex-1 items-center gap-[11px] rounded-2xl border-[1.5px] border-amber bg-surface px-4">
-          <SearchGlyph />
-          <input
-            autoFocus
-            value={q}
-            onChange={(e) => { setQ(e.target.value); if (creating) setCreating(false); }}
-            placeholder="Search exercises…"
-            className="min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none placeholder:text-ink-faint"
-          />
-        </div>
+      <div className="flex shrink-0 items-center gap-3 px-[18px] pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        {!creating && (
+          <div className="flex h-12 flex-1 items-center gap-[11px] rounded-2xl border-[1.5px] border-amber bg-surface px-4">
+            <SearchGlyph />
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search exercises…"
+              aria-label="Search exercises"
+              className="min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none placeholder:text-ink-faint"
+            />
+          </div>
+        )}
+        {creating && <h3 className="flex-1 font-medium">New custom exercise</h3>}
         <button
           onClick={onClose}
           aria-label="Close"
@@ -95,8 +107,8 @@ export function ExercisePicker({
 
       {creating ? (
         <div className="flex flex-col gap-3 overflow-y-auto p-4">
-          <h3 className="font-medium">New custom exercise</h3>
           <input
+            autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Exercise name"
@@ -111,6 +123,18 @@ export function ExercisePicker({
             {ALL_MUSCLE_GROUPS.map((g) => (
               <option key={g} value={g}>
                 {MUSCLE_LABELS[g]}
+              </option>
+            ))}
+          </select>
+          <label className="text-sm text-ink-soft">Equipment</label>
+          <select
+            value={equipment}
+            onChange={(e) => setEquipment(e.target.value)}
+            className="rounded-lg border border-line bg-surface px-3 py-2"
+          >
+            {EQUIPMENT_OPTIONS.map((eq) => (
+              <option key={eq} value={eq}>
+                {eq}
               </option>
             ))}
           </select>
@@ -176,10 +200,12 @@ export function ExercisePicker({
               </li>
             ))}
             {filtered.length === 0 && (
-              <li className="p-5 text-sm text-ink-faint">No matches.</li>
+              <li className="p-5 text-sm text-ink-faint">
+                {exercises.length === 0 ? "Loading exercises…" : "No matches."}
+              </li>
             )}
           </ul>
-          <div className="shrink-0 border-t border-line pb-safe pt-[18px] text-center">
+          <div className="shrink-0 border-t border-line pb-[env(safe-area-inset-bottom)] pt-[18px] text-center">
             <button
               onClick={() => {
                 setName(q);

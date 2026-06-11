@@ -10,8 +10,10 @@ import type {
 } from "./types";
 
 async function uid(): Promise<string> {
-  const { data } = await supabase.auth.getUser();
-  const id = data.user?.id;
+  // Read from the locally cached session (no network round-trip per mutation);
+  // RLS verifies the token server-side anyway.
+  const { data } = await supabase.auth.getSession();
+  const id = data.session?.user.id;
   if (!id) throw new Error("Not signed in");
   return id;
 }
@@ -178,9 +180,6 @@ export async function updateWorkout(
   if (e0) throw e0;
   const oldIds = (existing ?? []).map((r) => (r as { id: string }).id);
 
-  const { error: e1 } = await supabase.from("workouts").update({ name }).eq("id", id);
-  if (e1) throw e1;
-
   if (sets.length) {
     const rows = sets.map((s) => ({
       user_id,
@@ -203,6 +202,11 @@ export async function updateWorkout(
     const { error: e2 } = await supabase.from("workout_sets").delete().in("id", oldIds);
     if (e2) throw e2;
   }
+
+  // Rename last, once the set swap has succeeded — a failed save then leaves the
+  // workout (name and sets) completely untouched.
+  const { error: e1 } = await supabase.from("workouts").update({ name }).eq("id", id);
+  if (e1) throw e1;
 }
 
 export async function deleteWorkout(id: string): Promise<void> {
@@ -239,7 +243,11 @@ export async function saveTemplate(input: {
   if (input.sets.length) {
     const rows = input.sets.map((s) => ({ ...s, user_id, template_id }));
     const { error: e2 } = await supabase.from("template_sets").insert(rows);
-    if (e2) throw e2;
+    if (e2) {
+      // Don't leave an empty template behind if its sets failed to save.
+      await supabase.from("templates").delete().eq("id", template_id);
+      throw e2;
+    }
   }
   return template_id;
 }
@@ -250,15 +258,28 @@ export async function updateTemplate(
   sets: { exercise_id: string; set_index: number; weight: number; reps: number }[],
 ): Promise<void> {
   const user_id = await uid();
-  const { error: e1 } = await supabase.from("templates").update({ name }).eq("id", id);
-  if (e1) throw e1;
-  const { error: e2 } = await supabase.from("template_sets").delete().eq("template_id", id);
-  if (e2) throw e2;
+  // Insert the replacement sets BEFORE deleting the old ones, so a failed insert
+  // can't wipe the template's contents (mirrors updateWorkout).
+  const { data: existing, error: e0 } = await supabase
+    .from("template_sets")
+    .select("id")
+    .eq("template_id", id);
+  if (e0) throw e0;
+  const oldIds = (existing ?? []).map((r) => (r as { id: string }).id);
+
   if (sets.length) {
     const rows = sets.map((s) => ({ ...s, user_id, template_id: id }));
     const { error: e3 } = await supabase.from("template_sets").insert(rows);
-    if (e3) throw e3;
+    if (e3) throw e3; // old sets still intact — nothing lost
   }
+
+  if (oldIds.length) {
+    const { error: e2 } = await supabase.from("template_sets").delete().in("id", oldIds);
+    if (e2) throw e2;
+  }
+
+  const { error: e1 } = await supabase.from("templates").update({ name }).eq("id", id);
+  if (e1) throw e1;
 }
 
 export async function deleteTemplate(id: string): Promise<void> {

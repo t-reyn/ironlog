@@ -75,12 +75,13 @@ export function Tools({ userEmail }: { userEmail: string }) {
     if (customExercises.length === 0) return [];
     const customIds = new Set(customExercises.map((e) => e.id));
     const usedIds = new Set(
-      workouts
-        .flatMap((w) => w.sets.map((s) => s.exercise_id))
-        .filter((id) => customIds.has(id)),
+      [
+        ...workouts.flatMap((w) => w.sets.map((s) => s.exercise_id)),
+        ...templates.flatMap((t) => t.sets.map((s) => s.exercise_id)),
+      ].filter((id) => customIds.has(id)),
     );
     return customExercises.filter((e) => usedIds.has(e.id));
-  }, [customExercises, workouts]);
+  }, [customExercises, workouts, templates]);
 
   const usedCustomIds = useMemo(
     () => new Set(customExercisesUsed.map((e) => e.id)),
@@ -100,6 +101,8 @@ export function Tools({ userEmail }: { userEmail: string }) {
       await refreshExercises();
       setCustomName("");
       setShowCustomForm(false);
+    } catch {
+      toast.error("Couldn't save — you may already have an exercise with that name.");
     } finally {
       setSavingCustom(false);
     }
@@ -110,7 +113,7 @@ export function Tools({ userEmail }: { userEmail: string }) {
     const ok = await confirmDialog({
       title: "Delete custom exercise?",
       message: isUsed
-        ? `“${name}” has been logged in workouts. Deleting it will also remove those sets from your history.`
+        ? `“${name}” is used in your workouts or templates. Deleting it will also remove those sets.`
         : `“${name}” will be permanently removed.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
@@ -121,7 +124,7 @@ export function Tools({ userEmail }: { userEmail: string }) {
     try {
       if (isUsed) {
         await deleteCustomExerciseAndSets(id);
-        await refreshWorkouts();
+        await Promise.all([refreshWorkouts(), refreshTemplates()]);
       } else {
         await deleteCustomExercise(id);
       }
@@ -147,16 +150,24 @@ export function Tools({ userEmail }: { userEmail: string }) {
   }
 
   async function setUnit(u: Unit) {
-    await updateProfile({ unit: u });
-    useStore.setState((s) => ({ profile: s.profile ? { ...s.profile, unit: u } : s.profile }));
+    try {
+      await updateProfile({ unit: u });
+      useStore.setState((s) => ({ profile: s.profile ? { ...s.profile, unit: u } : s.profile }));
+    } catch {
+      toast.error("Couldn't update units. Try again.");
+    }
   }
 
   async function setRest(seconds: number) {
-    await updateProfile({ default_rest_seconds: seconds });
-    useStore.setState((s) => ({
-      profile: s.profile ? { ...s.profile, default_rest_seconds: seconds } : s.profile,
-      rest: { ...s.rest, duration: seconds },
-    }));
+    try {
+      await updateProfile({ default_rest_seconds: seconds });
+      useStore.setState((s) => ({
+        profile: s.profile ? { ...s.profile, default_rest_seconds: seconds } : s.profile,
+        rest: { ...s.rest, duration: seconds },
+      }));
+    } catch {
+      toast.error("Couldn't update rest timer. Try again.");
+    }
   }
 
   function showInstallGuide() {

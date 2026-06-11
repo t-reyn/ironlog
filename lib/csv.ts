@@ -19,8 +19,11 @@ const COLUMNS = [
   "Set",
   "Warmup",
   "Weight",
+  "Unit",
   "Reps",
+  "RPE",
   "Est 1RM",
+  "Notes",
 ] as const;
 
 /** Flatten every set into one CSV row. Newest workouts first. */
@@ -34,20 +37,28 @@ export function exportWorkoutsToCsv(
   for (const w of workouts) {
     const date = w.performed_at.slice(0, 10);
     const sets = [...w.sets].sort((a, b) => a.set_index - b.set_index);
-    for (const s of sets) {
+    // set_index is a single running counter across the whole workout (see
+    // lib/store.ts), so the "Set" column re-numbers from 1 within each
+    // contiguous run of the same exercise (e.g. each side of a superset).
+    let runStart = 0;
+    sets.forEach((s, i) => {
+      if (i === 0 || sets[i - 1].exercise_id !== s.exercise_id) runStart = i;
       const ex = exById.get(s.exercise_id);
       rows.push({
         Date: date,
         Workout: escapeFormula(w.name),
         Exercise: escapeFormula(ex?.name ?? "Unknown"),
         "Muscle Group": ex?.muscle_group ?? "",
-        Set: String(s.set_index + 1),
+        Set: String(i - runStart + 1),
         Warmup: s.is_warmup ? "yes" : "",
         Weight: String(s.weight),
+        Unit: s.unit ?? "kg",
         Reps: String(s.reps),
+        RPE: s.rpe != null ? String(s.rpe) : "",
         "Est 1RM": s.is_warmup ? "" : String(round1(blendedOneRepMax(s.weight, s.reps))),
+        Notes: escapeFormula(s.notes ?? ""),
       });
-    }
+    });
   }
 
   return Papa.unparse(rows, { columns: COLUMNS as unknown as string[] });
