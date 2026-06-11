@@ -52,7 +52,10 @@ export function Toaster() {
   const toasts = useToasts((s) => s.toasts);
   if (toasts.length === 0) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-3 z-[70] mx-auto flex w-full max-w-md flex-col gap-2 px-3">
+    <div
+      className="pointer-events-none fixed inset-x-0 z-[70] mx-auto flex w-full max-w-md flex-col gap-2 px-3"
+      style={{ top: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+    >
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} />
       ))}

@@ -41,6 +41,14 @@
   --rp-heat-3: #6f6762;
   --rp-heat-4: #2b2725;
 
+  /* muscle-group accents — darker/saturated for legible text + icons on cream */
+  --rp-mg-chest: #c2660a;
+  --rp-mg-back: #1f6b3b;
+  --rp-mg-legs: #2f6690;
+  --rp-mg-shoulders: #9a6a12;
+  --rp-mg-arms: #6b5bb5;
+  --rp-mg-core: #b0497f;
+
   --rp-shadow-sm: 0 1px 2px rgba(43, 39, 37, 0.05), 0 4px 12px rgba(43, 39, 37, 0.05);
   --rp-shadow: 0 1px 2px rgba(43, 39, 37, 0.05), 0 10px 26px rgba(43, 39, 37, 0.07);
 }
@@ -77,6 +85,14 @@
   --rp-heat-3: #9a9183;
   --rp-heat-4: #d3cbc1;
 
+  /* muscle-group accents — lightened so icons + labels stay visible on charcoal */
+  --rp-mg-chest: #ffab47;
+  --rp-mg-back: #5cc285;
+  --rp-mg-legs: #6fb3da;
+  --rp-mg-shoulders: #e0b052;
+  --rp-mg-arms: #b3a4ea;
+  --rp-mg-core: #e58cb8;
+
   --rp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.4);
   --rp-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 34px rgba(0, 0, 0, 0.5);
 }
@@ -109,6 +125,12 @@
     --rp-heat-2: #6f6762;
     --rp-heat-3: #9a9183;
     --rp-heat-4: #d3cbc1;
+    --rp-mg-chest: #ffab47;
+    --rp-mg-back: #5cc285;
+    --rp-mg-legs: #6fb3da;
+    --rp-mg-shoulders: #e0b052;
+    --rp-mg-arms: #b3a4ea;
+    --rp-mg-core: #e58cb8;
     --rp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.4);
     --rp-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 34px rgba(0, 0, 0, 0.5);
   }
@@ -154,12 +176,12 @@
   --color-steel: #93a4bf;
   --color-iron: #6b7280;
   --color-violet: #a78bfa;
-  --color-mg-chest: #ff9f29;
-  --color-mg-back: #1a4d2e;
-  --color-mg-legs: #3f7ea6;
-  --color-mg-shoulders: #c98a1a;
-  --color-mg-arms: #7a6cc4;
-  --color-mg-core: #c25b8a;
+  --color-mg-chest: var(--rp-mg-chest);
+  --color-mg-back: var(--rp-mg-back);
+  --color-mg-legs: var(--rp-mg-legs);
+  --color-mg-shoulders: var(--rp-mg-shoulders);
+  --color-mg-arms: var(--rp-mg-arms);
+  --color-mg-core: var(--rp-mg-core);
 
   --color-heat-0: var(--rp-heat-0);
   --color-heat-1: var(--rp-heat-1);

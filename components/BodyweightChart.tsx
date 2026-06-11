@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { useStore } from "@/lib/store";
 import { upsertBodyweight, deleteBodyweight } from "@/lib/db";
+import { toast } from "@/lib/toast";
 
 export function BodyweightChart() {
   const entries = useStore((s) => s.bodyweight);
@@ -26,6 +27,8 @@ export function BodyweightChart() {
     try {
       await deleteBodyweight(id);
       await refresh();
+    } catch {
+      toast.error("Couldn't delete entry. Try again.");
     } finally {
       setDeleting(null);
     }
@@ -42,6 +45,8 @@ export function BodyweightChart() {
       await upsertBodyweight(w, unit);
       await refresh();
       setValue("");
+    } catch {
+      toast.error("Couldn't log weight. Try again.");
     } finally {
       setBusy(false);
     }
@@ -59,23 +64,27 @@ export function BodyweightChart() {
             "No entries yet"
           )}
         </span>
-        <div className="ml-auto flex gap-2">
+        <form
+          className="ml-auto flex gap-2"
+          onSubmit={(e) => { e.preventDefault(); add(); }}
+        >
           <input
             type="number"
             inputMode="decimal"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={`Today (${unit})`}
+            aria-label={`Today's bodyweight in ${unit}`}
             className="w-28 rounded-md border border-line bg-night px-2 py-1 text-right outline-none focus:border-ember"
           />
           <button
-            onClick={add}
+            type="submit"
             disabled={busy}
             className="rounded-md bg-ember px-3 py-1 text-sm font-medium text-on-accent disabled:opacity-60"
           >
             Log
           </button>
-        </div>
+        </form>
       </div>
 
       {data.length > 0 ? (
@@ -126,6 +135,7 @@ export function BodyweightChart() {
               <button
                 onClick={() => remove(e.id)}
                 disabled={deleting === e.id}
+                aria-label={`Delete entry for ${e.logged_on}`}
                 className="ml-4 text-ink-faint hover:text-ember-soft disabled:opacity-40"
                 title="Delete entry"
               >

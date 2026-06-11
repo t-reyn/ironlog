@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { createCustomExercise } from "@/lib/db";
+import { toast } from "@/lib/toast";
 import {
   MUSCLE_LABELS,
   MUSCLE_COLORS,
@@ -44,9 +45,11 @@ export function ExercisePicker({
   const [busy, setBusy] = useState(false);
 
   const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase();
+    const term = norm(q);
     const list = term
-      ? exercises.filter((e) => e.name.toLowerCase().includes(term))
+      ? exercises.filter((e) => norm(e.name).includes(term))
       : exercises;
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [exercises, q]);
@@ -63,6 +66,8 @@ export function ExercisePicker({
       });
       await refreshExercises();
       onPick(created.id);
+    } catch {
+      toast.error("Couldn't create exercise — you may already have one with this name.");
     } finally {
       setBusy(false);
     }
@@ -71,7 +76,7 @@ export function ExercisePicker({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-night">
       {/* Search header — fixed, non-scrolling */}
-      <div className="flex shrink-0 items-center gap-3 px-[18px] pb-3 pt-safe">
+      <div className="flex shrink-0 items-center gap-3 px-[18px] pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="flex h-12 flex-1 items-center gap-[11px] rounded-2xl border-[1.5px] border-amber bg-surface px-4">
           <SearchGlyph />
           <input
@@ -79,6 +84,7 @@ export function ExercisePicker({
             value={q}
             onChange={(e) => { setQ(e.target.value); if (creating) setCreating(false); }}
             placeholder="Search exercises…"
+            aria-label="Search exercises"
             className="min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none placeholder:text-ink-faint"
           />
         </div>
@@ -176,10 +182,12 @@ export function ExercisePicker({
               </li>
             ))}
             {filtered.length === 0 && (
-              <li className="p-5 text-sm text-ink-faint">No matches.</li>
+              <li className="p-5 text-sm text-ink-faint">
+                {exercises.length === 0 ? "Loading exercises…" : "No matches."}
+              </li>
             )}
           </ul>
-          <div className="shrink-0 border-t border-line pb-safe pt-[18px] text-center">
+          <div className="shrink-0 border-t border-line pb-[env(safe-area-inset-bottom)] pt-[18px] text-center">
             <button
               onClick={() => {
                 setName(q);

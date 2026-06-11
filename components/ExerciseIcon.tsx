@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 import type { MovementPattern } from "@/lib/types";
 import { type IconKey, iconForExercise } from "@/lib/exerciseIcons";
 
@@ -488,7 +488,7 @@ function glyphs(color: string, sw: number) {
   return icons;
 }
 
-export function ExerciseIcon({
+function ExerciseIconBase({
   name,
   pattern,
   icon,
@@ -500,13 +500,18 @@ export function ExerciseIcon({
   style,
 }: Props) {
   const key = icon ?? iconForExercise({ name, movement_pattern: pattern });
+  // The icon is decorative wherever the exercise name is rendered next to it
+  // (every current call site), so hide it from screen readers unless a caller
+  // supplies an explicit `title` — otherwise AT would read internal keys.
+  const a11y = title
+    ? { role: "img" as const, "aria-label": title }
+    : { "aria-hidden": true as const };
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 48 48"
-      role="img"
-      aria-label={title ?? `${key} icon`}
+      {...a11y}
       className={className}
       style={{ display: "block", ...style }}
     >
@@ -514,3 +519,8 @@ export function ExerciseIcon({
     </svg>
   );
 }
+
+// Props are primitives at every call site, so memo skips the (expensive) glyph
+// rebuild on unrelated parent re-renders — e.g. the logger's per-second tick and
+// the picker's per-keystroke filtering.
+export const ExerciseIcon = memo(ExerciseIconBase);

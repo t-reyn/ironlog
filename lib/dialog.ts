@@ -38,6 +38,16 @@ export { useDialog };
 
 let dialogCounter = 0;
 
+// If a dialog is already open when a new one is requested, settle the existing
+// one with its cancel value first — otherwise its awaiting caller would hang
+// forever once we replace `active`.
+function settleActive() {
+  const active = useDialog.getState().active;
+  if (!active) return;
+  if (active.kind === "confirm") active.resolve(false);
+  else active.resolve(null);
+}
+
 export function confirmDialog(opts: {
   title: string;
   message?: string;
@@ -46,6 +56,7 @@ export function confirmDialog(opts: {
   danger?: boolean;
 }): Promise<boolean> {
   return new Promise((resolve) => {
+    settleActive();
     dialogCounter += 1;
     useDialog.getState().set({
       kind: "confirm",
@@ -68,6 +79,7 @@ export function promptDialog(opts: {
   confirmLabel?: string;
 }): Promise<string | null> {
   return new Promise((resolve) => {
+    settleActive();
     dialogCounter += 1;
     useDialog.getState().set({
       kind: "prompt",

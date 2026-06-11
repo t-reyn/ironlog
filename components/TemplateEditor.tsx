@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { updateTemplate, type TemplateWithSets } from "@/lib/db";
+import { toast } from "@/lib/toast";
 import { MUSCLE_COLORS } from "@/lib/muscles";
 import { ExerciseIcon } from "./ExerciseIcon";
 import { ExercisePicker } from "./ExercisePicker";
@@ -87,6 +88,8 @@ export function TemplateEditor({
       );
       await updateTemplate(template.id, name.trim(), sets);
       onSave();
+    } catch {
+      toast.error("Couldn't save template. Try again.");
     } finally {
       setSaving(false);
     }

@@ -16,10 +16,12 @@ export function Login() {
   const [showPw, setShowPw] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setNotice("");
 
     if (mode === "signup" && password !== confirm) {
       setError("Passwords don't match.");
@@ -31,22 +33,49 @@ export function Login() {
     }
 
     setStatus("busy");
-    const { error } =
-      mode === "signin"
-        ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-        : await supabase.auth.signUp({ email: email.trim(), password });
 
+    if (mode === "signin") {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) { setError(error.message); setStatus("error"); }
+      else setStatus("idle");
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
     if (error) {
       setError(error.message);
       setStatus("error");
-    } else {
-      setStatus("idle");
+      return;
     }
+    // Supabase returns a user with no identities when the email is already
+    // registered (it won't reveal this via an error), so guide them to sign in.
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      setError("An account with this email already exists. Sign in instead.");
+      setStatus("error");
+      return;
+    }
+    // No session means email confirmation is required.
+    if (!data.session) {
+      setNotice("Check your inbox to confirm your email, then sign in.");
+    }
+    setStatus("idle");
+  }
+
+  async function forgotPassword() {
+    setError("");
+    setNotice("");
+    if (!email.trim()) { setError("Enter your email first."); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+    });
+    if (error) setError(error.message);
+    else setNotice("Password reset link sent — check your inbox.");
   }
 
   function switchMode(m: Mode) {
     setMode(m);
     setError("");
+    setNotice("");
     setPassword("");
     setConfirm("");
   }
@@ -125,6 +154,17 @@ export function Login() {
         )}
 
         {error && <p className="text-sm font-medium text-danger-soft">{error}</p>}
+        {notice && <p className="text-sm font-medium text-green-ink">{notice}</p>}
+
+        {mode === "signin" && (
+          <button
+            type="button"
+            onClick={forgotPassword}
+            className="-mt-1 self-start text-[13px] font-semibold text-green-ink"
+          >
+            Forgot password?
+          </button>
+        )}
 
         <button
           type="submit"

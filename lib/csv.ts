@@ -19,8 +19,11 @@ const COLUMNS = [
   "Set",
   "Warmup",
   "Weight",
+  "Unit",
   "Reps",
+  "RPE",
   "Est 1RM",
+  "Notes",
 ] as const;
 
 /** Flatten every set into one CSV row. Newest workouts first. */
@@ -44,8 +47,11 @@ export function exportWorkoutsToCsv(
         Set: String(s.set_index + 1),
         Warmup: s.is_warmup ? "yes" : "",
         Weight: String(s.weight),
+        Unit: s.unit ?? "kg",
         Reps: String(s.reps),
+        RPE: s.rpe != null ? String(s.rpe) : "",
         "Est 1RM": s.is_warmup ? "" : String(round1(blendedOneRepMax(s.weight, s.reps))),
+        Notes: escapeFormula(s.notes ?? ""),
       });
     }
   }

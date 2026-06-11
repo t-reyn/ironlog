@@ -52,6 +52,7 @@ interface StoreState {
   rest: RestState;
 
   hydrate: () => Promise<void>;
+  reset: () => void;
   refreshWorkouts: () => Promise<void>;
   refreshTemplates: () => Promise<void>;
   refreshBodyweight: () => Promise<void>;
@@ -78,6 +79,7 @@ interface StoreState {
 
   // timer
   startRest: (seconds: number) => void;
+  adjustRest: (deltaSeconds: number) => void;
   stopRest: () => void;
 
   // helpers
@@ -108,8 +110,16 @@ export const useStore = create<StoreState>((set, get) => ({
     let savedDraft: Draft | null = null;
     try {
       const raw = localStorage.getItem("ironlog-draft");
-      if (raw) savedDraft = JSON.parse(raw) as Draft;
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        savedDraft = isValidDraft(parsed) ? parsed : null;
+      }
     } catch {}
+    // A draft that failed validation (corrupt / wrong shape) would crash the app
+    // on every launch — drop it so we recover instead of bricking.
+    if (!savedDraft) {
+      try { localStorage.removeItem("ironlog-draft"); } catch {}
+    }
 
     set({
       profile,
@@ -120,6 +130,22 @@ export const useStore = create<StoreState>((set, get) => ({
       rest: { endsAt: null, duration: profile.default_rest_seconds },
       loaded: true,
       ...(savedDraft ? { draft: savedDraft } : {}),
+    });
+  },
+
+  // Wipe all in-memory state and any persisted draft. Called on sign-out so the
+  // next user never sees the previous user's data (or inherits their draft).
+  reset: () => {
+    try { localStorage.removeItem("ironlog-draft"); } catch {}
+    set({
+      loaded: false,
+      exercises: [],
+      workouts: [],
+      templates: [],
+      bodyweight: [],
+      profile: null,
+      draft: null,
+      rest: { endsAt: null, duration: 90 },
     });
   },
 
@@ -397,12 +423,35 @@ export const useStore = create<StoreState>((set, get) => ({
 
   startRest: (seconds) =>
     set({ rest: { endsAt: Date.now() + seconds * 1000, duration: seconds } }),
+  // Nudge only the end time (min 5s remaining); the session default `duration`
+  // is left untouched so the ±15s buttons don't reset future rest lengths.
+  adjustRest: (deltaSeconds) => {
+    const { rest } = get();
+    if (rest.endsAt === null) return;
+    const endsAt = Math.max(Date.now() + 5000, rest.endsAt + deltaSeconds * 1000);
+    set({ rest: { ...rest, endsAt } });
+  },
   stopRest: () => set({ rest: { ...get().rest, endsAt: null } }),
 
   muscleOf: (exerciseId) =>
     get().exercises.find((e) => e.id === exerciseId)?.muscle_group,
   exerciseById: (id) => get().exercises.find((e) => e.id === id),
 }));
+
+// Guard a persisted value before adopting it as the active draft. A parseable
+// but wrong-shaped value (truncated write, schema drift) would otherwise crash
+// render on every launch. Edit drafts (workoutId) are never persisted, so a
+// stored one is stale and rejected.
+function isValidDraft(v: unknown): v is Draft {
+  if (typeof v !== "object" || v === null) return false;
+  const d = v as Record<string, unknown>;
+  return (
+    typeof d.name === "string" &&
+    typeof d.startedAt === "number" &&
+    Array.isArray(d.exercises) &&
+    d.workoutId === undefined
+  );
+}
 
 // Persist new-workout drafts across app close/reopen.
 // Edit drafts (workoutId present) are never persisted — they are ephemeral.

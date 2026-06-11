@@ -69,14 +69,14 @@ create table if not exists workout_sets (
   rpe numeric(3,1),
   is_warmup boolean not null default false,
   completed boolean not null default true,
+  unit text not null default 'kg' check (unit in ('kg','lb')),
   notes text
 );
 create index if not exists workout_sets_workout on workout_sets (workout_id);
 create index if not exists workout_sets_user_ex on workout_sets (user_id, exercise_id);
--- Added for per-exercise unit support; run separately on existing DBs:
--- alter table workout_sets add column if not exists unit text not null default 'kg' check (unit in ('kg','lb'));
--- Added for per-exercise notes (stored on each set of the exercise); run on existing DBs:
--- alter table workout_sets add column if not exists notes text;
+-- Additive migrations for existing DBs (idempotent — safe to re-run):
+alter table workout_sets add column if not exists unit text not null default 'kg' check (unit in ('kg','lb'));
+alter table workout_sets add column if not exists notes text;
 
 -- ---------------------------------------------------------------------------
 -- templates + template_sets (planned targets)
@@ -134,7 +134,7 @@ begin
 
   -- exercises: read built-ins (null user) OR own; write only own
   drop policy if exists exercises_read on exercises;
-  create policy exercises_read on exercises for select
+  create policy exercises_read on exercises for select to authenticated
     using (user_id is null or user_id = auth.uid ());
   drop policy if exists exercises_insert on exercises;
   create policy exercises_insert on exercises for insert
