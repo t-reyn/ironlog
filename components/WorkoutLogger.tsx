@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { saveTemplate } from "@/lib/db";
 import { MUSCLE_COLORS } from "@/lib/muscles";
@@ -141,6 +141,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const [swappingIdx, setSwappingIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -298,12 +299,23 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
           <Icon name="chevron" size={18} color="currentColor" style={{ transform: "rotate(90deg)" }} />
         </button>
         <input
+          ref={nameInputRef}
           value={draft.name}
           onChange={(e) => setName(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
           aria-label="Workout name"
-          className="flex-1 bg-transparent text-lg font-bold tracking-[-0.015em] text-ink outline-none"
+          title="Tap to rename this workout"
+          className="min-w-0 flex-1 border-b border-transparent bg-transparent pb-0.5 text-lg font-bold tracking-[-0.015em] text-ink outline-none focus:border-amber"
           placeholder="Workout name"
         />
+        <button
+          onClick={() => nameInputRef.current?.focus()}
+          aria-label="Rename workout"
+          title="Rename workout"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-faint hover:text-ink"
+        >
+          <Icon name="edit" size={16} color="currentColor" />
+        </button>
         <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-amber">
           {elapsedStr}
         </span>
