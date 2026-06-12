@@ -258,24 +258,23 @@ export function Dashboard({
         <WeekStrip days={view.weekDays} />
       </div>
 
-      {/* big lifts */}
+      {/* big lifts — one strip, not five cards */}
       {big5Orm.some(({ orm }) => orm !== null) && (
-        <div>
-          <Eyebrow className="mb-3 ml-0.5">ESTIMATED 1RM</Eyebrow>
-          <div className="grid grid-cols-5 gap-2">
-            {big5Orm.map(({ label, orm }) => (
-              <div
-                key={label}
-                className="rounded-2xl border border-line-2 bg-surface p-3 text-center shadow-[var(--rp-shadow-sm)]"
-              >
-                <div className="rp-eyebrow" style={{ fontSize: 9 }}>{label}</div>
-                <div className="mt-1.5 text-xl font-extrabold tracking-[-0.03em] text-green-ink">
-                  {orm ?? "—"}
-                </div>
-                <div className="rp-eyebrow" style={{ fontSize: 8 }}>{orm ? unit : "—"}</div>
+        <div
+          className="flex rounded-[28px] border border-line-2 bg-surface px-1 py-3 shadow-[var(--rp-shadow-sm)]"
+          title={`Estimated 1RM (${unit})`}
+        >
+          {big5Orm.map(({ label, orm }, i) => (
+            <div
+              key={label}
+              className={["flex-1 text-center", i > 0 ? "border-l border-line-2" : ""].join(" ")}
+            >
+              <div className="rp-eyebrow" style={{ fontSize: 8.5 }}>{label}</div>
+              <div className="mt-1 text-[19px] font-extrabold leading-none tracking-[-0.03em] text-green-ink">
+                {orm ?? "—"}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       )}
 

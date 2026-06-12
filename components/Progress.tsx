@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   Area,
+  CartesianGrid,
   ComposedChart,
   Line,
   ResponsiveContainer,
@@ -13,9 +14,11 @@ import {
 import { useStore } from "@/lib/store";
 import { blendedOneRepMax, estimateOneRepMax, round1 } from "@/lib/oneRepMax";
 import { localDay } from "@/lib/stats";
-import { volumeByMuscle, MUSCLE_LABELS } from "@/lib/muscles";
+import { volumeByMuscle, MUSCLE_COLORS, MUSCLE_LABELS } from "@/lib/muscles";
 import { toKg, type BodyweightEntry, type MuscleGroup } from "@/lib/types";
-import { Eyebrow, Delta, Pill } from "./ShojinUI";
+import { ExerciseIcon } from "./ExerciseIcon";
+import { ExercisePicker } from "./ExercisePicker";
+import { Eyebrow, Delta, Icon, Pill } from "./ShojinUI";
 
 // Exact lifts only — no variants (e.g. not "Iso-Lateral … Bench Press").
 const PR_LIFTS: { label: string; names: string[] }[] = [
@@ -61,9 +64,10 @@ export function Progress() {
 
   const [exerciseId, setExerciseId] = useState<string>("");
   const [metric, setMetric] = useState<Metric>("e1rm");
+  const [picking, setPicking] = useState(false);
 
   const selected = exerciseId || logged[0]?.id || "";
-  const selectedMeta = logged.find((e) => e.id === selected);
+  const selectedMeta = exercises.find((e) => e.id === selected);
   const selectedName = selectedMeta?.name ?? "";
   const isDuration = selectedMeta?.exercise_type === "duration";
   const hasBodyweight = bodyweight.length > 0;
@@ -190,18 +194,33 @@ export function Progress() {
         <Pill tone="green">{data.length} POINTS</Pill>
       </div>
 
-      {/* exercise selector */}
-      <select
-        value={selected}
-        onChange={(e) => setExerciseId(e.target.value)}
-        className="rounded-full border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-ink outline-none focus:border-green-ink"
+      {/* exercise selector — branded row, opens the full picker */}
+      <button
+        onClick={() => setPicking(true)}
+        aria-label="Change exercise"
+        className="flex items-center gap-3 rounded-[20px] border border-line-2 bg-surface px-3.5 py-2.5 text-left shadow-[var(--rp-shadow-sm)]"
       >
-        {logged.map((e) => (
-          <option key={e.id} value={e.id}>
-            {e.name}
-          </option>
-        ))}
-      </select>
+        <span style={{ color: MUSCLE_COLORS[selectedMeta?.muscle_group ?? "core"] }}>
+          <ExerciseIcon
+            name={selectedMeta?.name}
+            pattern={selectedMeta?.movement_pattern ?? "other"}
+            size={30}
+          />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15.5px] font-bold tracking-[-0.01em] text-ink">
+            {selectedName || "Pick an exercise"}
+          </span>
+          {selectedMeta && (
+            <span className="mt-px block font-mono text-[10px] uppercase text-ink-faint">
+              {selectedMeta.equipment} · {MUSCLE_LABELS[selectedMeta.muscle_group]}
+            </span>
+          )}
+        </span>
+        <span className="shrink-0 text-ink-faint">
+          <Icon name="chevron" size={16} color="currentColor" style={{ transform: "rotate(90deg)" }} />
+        </span>
+      </button>
 
       {/* metric chips */}
       <div className="flex gap-2">
@@ -237,27 +256,25 @@ export function Progress() {
 
         <div className="mt-3.5 h-[150px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 8, right: 6, bottom: 0, left: -18 }}>
+            <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
               <defs>
                 <linearGradient id="rpArea" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="var(--color-green)" stopOpacity={0.22} />
+                  <stop offset="0" stopColor="var(--color-green)" stopOpacity={0.14} />
                   <stop offset="1" stopColor="var(--color-green)" stopOpacity={0} />
                 </linearGradient>
               </defs>
+              <CartesianGrid vertical={false} stroke="var(--color-line-2)" strokeWidth={1} />
               <XAxis
                 dataKey="date"
-                tick={{ fill: "var(--color-ink-faint)", fontSize: 10 }}
-                tickFormatter={(d: string) => d.slice(5)}
+                tick={{ fill: "var(--color-ink-faint)", fontSize: 9.5, fontFamily: "var(--font-mono)" }}
+                tickFormatter={(d: string) =>
+                  new Date(d).toLocaleDateString("en-US", { month: "short" }).toUpperCase()
+                }
                 tickLine={false}
                 axisLine={false}
-                minTickGap={24}
+                minTickGap={36}
               />
-              <YAxis
-                tick={{ fill: "var(--color-ink-faint)", fontSize: 10 }}
-                width={44}
-                tickLine={false}
-                axisLine={false}
-              />
+              <YAxis hide domain={["auto", "auto"]} />
               <Tooltip
                 contentStyle={{
                   background: "var(--color-surface-2)",
@@ -273,7 +290,20 @@ export function Progress() {
                 dataKey="value"
                 stroke="var(--color-green)"
                 strokeWidth={2.6}
-                dot={{ r: 3, fill: "var(--color-surface)", stroke: "var(--color-green)", strokeWidth: 2.4 }}
+                dot={(props: { key?: React.Key | null; cx?: number; cy?: number; index?: number }) => {
+                  const lastPt = props.index === data.length - 1;
+                  return (
+                    <circle
+                      key={props.key ?? props.index}
+                      cx={props.cx}
+                      cy={props.cy}
+                      r={lastPt ? 5 : 3.2}
+                      fill={lastPt ? "var(--color-amber)" : "var(--color-surface)"}
+                      stroke={lastPt ? "var(--color-amber)" : "var(--color-green)"}
+                      strokeWidth={2.2}
+                    />
+                  );
+                }}
                 activeDot={{ r: 5, fill: "var(--color-amber)", stroke: "var(--color-amber)" }}
               />
             </ComposedChart>
@@ -285,21 +315,31 @@ export function Progress() {
       {muscleSplit.length > 0 && (
         <div className="mt-1">
           <Eyebrow className="mb-3.5 ml-0.5">VOLUME BY MUSCLE</Eyebrow>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5">
             {muscleSplit.map((m) => (
-              <div key={m.mg} className="flex items-center gap-3">
-                <span className="w-[72px] text-[13.5px] font-semibold">{m.label}</span>
-                <div className="h-[9px] flex-1 overflow-hidden rounded-full bg-line">
+              <div key={m.mg} className="flex items-center gap-2.5">
+                <span className="w-[70px] text-[13px] font-semibold">{m.label}</span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-line">
                   <div
-                    className={`h-full rounded-full ${m.top ? "bg-amber" : "bg-green"}`}
-                    style={{ width: `${m.barW}%` }}
+                    className="h-full rounded-full"
+                    style={{ width: `${m.barW}%`, background: MUSCLE_COLORS[m.mg] }}
                   />
                 </div>
-                <span className="w-[34px] text-right font-mono text-xs text-ink-soft">{m.pct}%</span>
+                <span className="w-8 text-right font-mono text-[11px] text-ink-soft">{m.pct}%</span>
               </div>
             ))}
           </div>
         </div>
+      )}
+
+      {picking && (
+        <ExercisePicker
+          onPick={(id) => {
+            setExerciseId(id);
+            setPicking(false);
+          }}
+          onClose={() => setPicking(false)}
+        />
       )}
 
       {/* personal records */}

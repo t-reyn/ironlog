@@ -1,28 +1,30 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useStore } from "@/lib/store";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useStore, type DraftExercise } from "@/lib/store";
 import { saveTemplate } from "@/lib/db";
-import { MUSCLE_COLORS } from "@/lib/muscles";
+import { MUSCLE_COLORS, MUSCLE_LABELS } from "@/lib/muscles";
 import { confirmDialog, promptDialog } from "@/lib/dialog";
 import { toast } from "@/lib/toast";
 import {
-  lastSessionSummary,
   prevHintsFor,
   recentSessionsFor,
   suggestNextLoad,
+  type PrevHint,
   type Suggestion,
 } from "@/lib/progression";
-import type { Readiness } from "@/lib/types";
+import type { Exercise } from "@/lib/types";
 import { ExerciseIcon } from "./ExerciseIcon";
 import { ExercisePicker } from "./ExercisePicker";
-import { SetRow } from "./SetRow";
+import { KeypadSheet } from "./KeypadSheet";
+import { RestDock } from "./RestDock";
+import { SetRow, SET_GRID_COLS, effectiveValues, type ValueField } from "./SetRow";
 import { Icon } from "./ShojinUI";
 
 const SUGGESTION_CLASS: Record<Suggestion["kind"], string> = {
-  increase: "bg-green-soft text-green-ink",
+  increase: "bg-amber-soft text-amber-ink",
   hold: "border border-line bg-surface text-ink-soft",
-  deload: "bg-amber/15 text-amber",
+  deload: "bg-amber-soft text-amber-ink",
 };
 
 const SUGGESTION_TITLE: Record<Suggestion["kind"], string> = {
@@ -33,83 +35,87 @@ const SUGGESTION_TITLE: Record<Suggestion["kind"], string> = {
 
 function suggestionLabel(s: Suggestion, unit: string): string {
   const arrow = s.kind === "increase" ? "↑" : s.kind === "deload" ? "↓" : "=";
-  if (s.seconds != null) return `${arrow} ${s.seconds}s`;
-  if (s.addReps) return `${arrow} ${s.reps} reps`;
-  return `${arrow} ${s.weight} ${unit} × ${s.reps}`;
+  if (s.seconds != null) return `${arrow} ${s.seconds}S`;
+  if (s.addReps) return `${arrow} ${s.reps} REPS`;
+  return `${arrow} ${s.weight} ${unit.toUpperCase()}`;
 }
 
-const READINESS_ROWS: { key: keyof Readiness; label: string; hint: string }[] = [
-  { key: "sleep", label: "Sleep", hint: "poor → great" },
-  { key: "energy", label: "Energy", hint: "drained → fresh" },
-  { key: "soreness", label: "Soreness", hint: "none → very sore" },
-];
+function fmtClock(totalSec: number): string {
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+    : `${m}:${String(s).padStart(2, "0")}`;
+}
 
-function ReadinessCard({
-  readiness,
-  isEdit,
-  onChange,
+function fmtRest(sec: number): string {
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+}
+
+interface ExerciseView {
+  ex: DraftExercise;
+  meta: Exercise | undefined;
+  exUnit: "kg" | "lb";
+  isDuration: boolean;
+  isBodyweight: boolean;
+  suggestion: Suggestion | null;
+  prevHints: (PrevHint | null)[];
+  doneCount: number;
+  activeSetIdx: number; // first undone set, -1 when complete
+}
+
+/** One-line summary under a collapsed exercise name. */
+function collapsedMeta(v: ExerciseView): string {
+  const { ex, doneCount, isDuration, exUnit } = v;
+  const total = ex.sets.length;
+  if (total > 0 && doneCount === total) {
+    const done = ex.sets.filter((s) => s.done);
+    if (isDuration) {
+      const best = Math.max(...done.map((s) => s.seconds));
+      return `${total} SETS · TOP ${best}s`;
+    }
+    const top = done.reduce((a, b) => (b.weight > a.weight ? b : a), done[0]);
+    return `${total} SETS · TOP ${top.weight > 0 ? `${top.weight} × ${top.reps}` : `${top.reps} REPS`}`;
+  }
+  const progress = doneCount > 0 ? `${doneCount}/${total} SETS` : `${total} SETS`;
+  const lastTop = v.prevHints.find((p) => p !== null);
+  if (!lastTop) return progress;
+  const last = isDuration
+    ? `${lastTop.seconds}s`
+    : lastTop.weight > 0
+      ? `${lastTop.weight} ${exUnit.toUpperCase()}`
+      : `${lastTop.reps} REPS`;
+  return `${progress} · LAST ${last}`;
+}
+
+function SheetRow({
+  label,
+  detail,
+  danger,
+  icon,
+  onTap,
 }: {
-  readiness: Readiness;
-  isEdit: boolean;
-  onChange: (patch: Partial<Readiness>) => void;
+  label: string;
+  detail?: string;
+  danger?: boolean;
+  icon: ReactNode;
+  onTap: () => void;
 }) {
-  const answered = READINESS_ROWS.filter((r) => readiness[r.key] !== null);
-  const [open, setOpen] = useState(() => !isEdit && answered.length === 0);
-
   return (
-    <div className="rounded-[24px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2"
-        aria-expanded={open}
-      >
-        <span className="rp-eyebrow">Readiness check-in</span>
-        {!open && answered.length > 0 && (
-          <span className="font-mono text-xs text-ink-soft">
-            {READINESS_ROWS.map((r) => readiness[r.key] ?? "–").join(" · ")}
-          </span>
-        )}
-        <span
-          className="ml-auto text-ink-faint transition-transform duration-150"
-          style={{ display: "inline-block", transform: open ? "rotate(-90deg)" : "rotate(90deg)" }}
-        >
-          <Icon name="chevron" size={15} color="currentColor" />
-        </span>
-      </button>
-
-      {open && (
-        <div className="mt-3 flex flex-col gap-2.5">
-          {READINESS_ROWS.map(({ key, label, hint }) => (
-            <div key={key} className="flex items-center gap-2">
-              <span className="w-[72px] shrink-0 text-[13px] font-semibold text-ink-soft" title={hint}>
-                {label}
-              </span>
-              <div className="flex flex-1 gap-1.5">
-                {[1, 2, 3, 4, 5].map((v) => {
-                  const on = readiness[key] === v;
-                  return (
-                    <button
-                      key={v}
-                      onClick={() => onChange({ [key]: on ? null : v })}
-                      aria-pressed={on}
-                      aria-label={`${label} ${v} of 5`}
-                      className={[
-                        "h-9 flex-1 rounded-lg text-sm font-semibold transition-colors",
-                        on
-                          ? "bg-ink text-bg"
-                          : "border border-line bg-surface-2 text-ink-faint hover:text-ink-soft",
-                      ].join(" ")}
-                    >
-                      {v}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
+    <button
+      onClick={onTap}
+      className={[
+        "flex w-full items-center gap-3 border-t border-line-2 px-1 py-3 text-left first:border-t-0",
+        danger ? "text-danger-soft" : "text-ink",
+      ].join(" ")}
+    >
+      <span className={danger ? "text-danger-soft" : "text-ink-soft"}>{icon}</span>
+      <span className="flex-1 text-[15px] font-semibold tracking-[-0.01em]">{label}</span>
+      {detail && (
+        <span className="max-w-[40%] truncate font-mono text-[11px] uppercase text-ink-faint">{detail}</span>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -117,7 +123,6 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const draft = useStore((s) => s.draft);
   const setName = useStore((s) => s.setDraftName);
   const setNotes = useStore((s) => s.setDraftNotes);
-  const setReadiness = useStore((s) => s.setDraftReadiness);
   const addExercise = useStore((s) => s.addDraftExercise);
   const replaceExercise = useStore((s) => s.replaceDraftExercise);
   const removeExercise = useStore((s) => s.removeDraftExercise);
@@ -135,13 +140,22 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const exerciseById = useStore((s) => s.exerciseById);
   const profile = useStore((s) => s.profile);
   const refreshTemplates = useStore((s) => s.refreshTemplates);
+  const startRest = useStore((s) => s.startRest);
+  const restDuration = useStore((s) => s.rest.duration);
   const restActive = useStore((s) => s.rest.endsAt !== null);
 
+  const [expandedIdx, setExpandedIdx] = useState(() => {
+    const d = useStore.getState().draft;
+    const i = d?.exercises.findIndex((ex) => ex.sets.some((s) => !s.done)) ?? -1;
+    return i >= 0 ? i : 0;
+  });
+  const [keypad, setKeypad] = useState<{ exIdx: number; setIdx: number; field: ValueField } | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [picking, setPicking] = useState(false);
   const [swappingIdx, setSwappingIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const nameInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -152,16 +166,94 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
 
   if (!draft) return null;
 
-  const elapsedSec = Math.floor((now - draft.startedAt) / 1000);
-  const elapsedStr =
-    elapsedSec < 3600
-      ? `${Math.floor(elapsedSec / 60)}m ${String(elapsedSec % 60).padStart(2, "0")}s`
-      : `${Math.floor(elapsedSec / 3600)}h ${Math.floor((elapsedSec % 3600) / 60)}m`;
+  const views: ExerciseView[] = draft.exercises.map((ex) => {
+    const meta = exerciseById(ex.exerciseId);
+    const exUnit = ex.unit ?? unit;
+    const sessions = draft.workoutId || !meta ? [] : recentSessionsFor(workouts, ex.exerciseId);
+    return {
+      ex,
+      meta,
+      exUnit,
+      isDuration: meta?.exercise_type === "duration",
+      isBodyweight: meta?.equipment === "bodyweight",
+      suggestion: sessions.length && meta ? suggestNextLoad(meta, sessions, exUnit) : null,
+      prevHints: prevHintsFor(sessions[0] ?? [], ex.sets.map((s) => s.setType), exUnit),
+      doneCount: ex.sets.filter((s) => s.done).length,
+      activeSetIdx: ex.sets.findIndex((s) => !s.done),
+    };
+  });
 
-  const completedSets = draft.exercises.reduce(
-    (n, ex) => n + ex.sets.filter((s) => s.done).length,
-    0,
-  );
+  const totalSets = views.reduce((n, v) => n + v.ex.sets.length, 0);
+  const completedSets = views.reduce((n, v) => n + v.doneCount, 0);
+  const expanded = views[expandedIdx] as ExerciseView | undefined;
+  const activeSet =
+    expanded && expanded.activeSetIdx >= 0
+      ? { exIdx: expandedIdx, setIdx: expanded.activeSetIdx }
+      : null;
+
+  const elapsedStr = fmtClock(Math.max(0, Math.floor((now - draft.startedAt) / 1000)));
+
+  function scrollToCard(idx: number) {
+    requestAnimationFrame(() => {
+      const container = scrollRef.current;
+      const card = container?.querySelector<HTMLElement>(`[data-ex-card="${idx}"]`);
+      if (!container || !card) return;
+      const top =
+        card.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 10;
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      container.scrollTo({ top, behavior: reduce ? "auto" : "smooth" });
+    });
+  }
+
+  function expandExercise(idx: number) {
+    setExpandedIdx(idx);
+    setKeypad(null);
+    scrollToCard(idx);
+  }
+
+  /** Commit a set with its effective (entered or ghost-prefilled) values. */
+  function commitSet(exIdx: number, setIdx: number, viaKeypad: boolean) {
+    if (!draft) return;
+    const v = views[exIdx];
+    const set = v.ex.sets[setIdx];
+    const eff = effectiveValues(set, v.prevHints[setIdx]);
+    updateSet(exIdx, setIdx, { ...eff, done: true });
+    if (set.setType === "normal") startRest(v.ex.restSeconds ?? restDuration);
+
+    const nextSetIdx = v.ex.sets.findIndex((s, i) => i !== setIdx && !s.done);
+    if (nextSetIdx === -1) {
+      // Exercise complete — collapse it and expand the next unfinished one,
+      // preferring exercises below before wrapping back up.
+      setKeypad(null);
+      const incomplete = (i: number) => i !== exIdx && views[i].ex.sets.some((s) => !s.done);
+      let nextEx = -1;
+      for (let i = exIdx + 1; i < views.length; i++) if (incomplete(i)) { nextEx = i; break; }
+      if (nextEx === -1) for (let i = 0; i < exIdx; i++) if (incomplete(i)) { nextEx = i; break; }
+      if (nextEx >= 0) {
+        setExpandedIdx(nextEx);
+        scrollToCard(nextEx);
+      }
+    } else if (viaKeypad) {
+      setKeypad({ exIdx, setIdx: nextSetIdx, field: "weight" });
+    }
+  }
+
+  function toggleDone(exIdx: number, setIdx: number) {
+    if (!draft) return;
+    const set = draft.exercises[exIdx].sets[setIdx];
+    if (set.done) updateSet(exIdx, setIdx, { done: false });
+    else commitSet(exIdx, setIdx, false);
+  }
+
+  async function renameWorkout() {
+    if (!draft) return;
+    const name = await promptDialog({
+      title: "Rename workout",
+      defaultValue: draft.name,
+      confirmLabel: "Rename",
+    });
+    if (name) setName(name);
+  }
 
   async function saveAsTemplate() {
     if (!draft) return;
@@ -196,7 +288,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   function applySuggestion(exIdx: number, sugg: Suggestion, isDuration: boolean) {
     if (!draft) return;
     draft.exercises[exIdx].sets.forEach((s, i) => {
-      if (s.setType !== "normal") return;
+      if (s.setType !== "normal" || s.done) return;
       if (isDuration) updateSet(exIdx, i, { seconds: sugg.seconds ?? 0 });
       else if (sugg.addReps) updateSet(exIdx, i, { reps: sugg.reps });
       else updateSet(exIdx, i, { weight: sugg.weight, reps: sugg.reps });
@@ -219,6 +311,30 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
     }
   }
 
+  async function editSessionNote(exIdx: number, exerciseName: string) {
+    if (!draft) return;
+    const next = await promptDialog({
+      title: "Session note",
+      message: `Saved with today's ${exerciseName} sets.`,
+      placeholder: "e.g. Felt heavy, slow eccentric",
+      defaultValue: draft.exercises[exIdx]?.notes ?? "",
+      confirmLabel: "Save",
+    });
+    if (next !== null) setExerciseNotes(exIdx, next);
+  }
+
+  async function editWorkoutComment() {
+    if (!draft) return;
+    const next = await promptDialog({
+      title: "Workout comment",
+      message: "How did it go? Shows in History.",
+      placeholder: "(optional)",
+      defaultValue: draft.notes,
+      confirmLabel: "Save",
+    });
+    if (next !== null) setNotes(next);
+  }
+
   async function removeExerciseWithUndo(exIdx: number) {
     if (!draft) return;
     const meta = exerciseById(draft.exercises[exIdx].exerciseId);
@@ -234,6 +350,8 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
       danger: true,
     });
     if (!ok) return;
+    setKeypad(null);
+    if (expandedIdx >= draft.exercises.length - 1) setExpandedIdx(Math.max(0, expandedIdx - 1));
     removeExercise(exIdx);
     toast.show(`Removed ${meta?.name ?? "exercise"}.`, {
       action: { label: "Undo", onClick: () => insertExercise(exIdx, snapshot) },
@@ -287,208 +405,216 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
+  // Footer "Log set 3 — 62.5 kg × 8" + rest-dock "NEXT · SET 4 — 62.5 × 8".
+  let activeSummary: { n: string; what: string } | null = null;
+  if (activeSet && expanded) {
+    const set = expanded.ex.sets[activeSet.setIdx];
+    const eff = effectiveValues(set, expanded.prevHints[activeSet.setIdx]);
+    const what = expanded.isDuration
+      ? `${eff.seconds}s`
+      : eff.weight > 0 || expanded.isBodyweight
+        ? `${expanded.isBodyweight ? "+" : ""}${eff.weight} ${expanded.exUnit} × ${eff.reps}`
+        : `${eff.reps} reps`;
+    activeSummary = { n: set.setType === "warmup" ? "W" : `${activeSet.setIdx + 1}`, what };
+  }
+
+  const keypadView = keypad ? views[keypad.exIdx] : null;
+  const keypadSet = keypad && keypadView ? keypadView.ex.sets[keypad.setIdx] : null;
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-night">
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-line-2 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+      <div className="flex shrink-0 items-center gap-3 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <button
           onClick={onClose}
           aria-label="Close workout"
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-ink-soft hover:text-ink"
         >
-          <Icon name="chevron" size={18} color="currentColor" style={{ transform: "rotate(90deg)" }} />
+          <Icon name="chevron" size={18} color="currentColor" style={{ transform: "rotate(180deg)" }} />
         </button>
-        <input
-          ref={nameInputRef}
-          value={draft.name}
-          onChange={(e) => setName(e.target.value)}
-          onFocus={(e) => e.currentTarget.select()}
-          aria-label="Workout name"
-          title="Tap to rename this workout"
-          className="min-w-0 flex-1 border-b border-transparent bg-transparent pb-0.5 text-lg font-bold tracking-[-0.015em] text-ink outline-none focus:border-amber"
-          placeholder="Workout name"
-        />
+        <button onClick={renameWorkout} className="min-w-0 flex-1 text-left" title="Tap to rename">
+          <div className="truncate text-[17px] font-bold tracking-[-0.015em] text-ink">{draft.name}</div>
+          <div className="mt-px font-mono text-[11.5px] text-ink-faint">
+            <span className="font-semibold text-amber">{elapsedStr}</span> · {completedSets}/{totalSets} SETS
+          </div>
+        </button>
         <button
-          onClick={() => nameInputRef.current?.focus()}
-          aria-label="Rename workout"
-          title="Rename workout"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-faint hover:text-ink"
+          onClick={onFinish}
+          disabled={saving}
+          className="shrink-0 rounded-full bg-green px-[18px] py-2.5 text-sm font-bold text-on-green disabled:opacity-60"
         >
-          <Icon name="edit" size={16} color="currentColor" />
+          {saving ? "Saving…" : draft.workoutId ? "Save" : "Finish"}
         </button>
-        <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-amber">
-          {elapsedStr}
-        </span>
       </div>
 
-      {/* Scrollable exercises */}
-      <div className="flex-1 overflow-y-auto">
-        <div className={`mx-auto flex max-w-3xl flex-col p-4 ${restActive ? "pb-32" : ""}`}>
-          <ReadinessCard
-            readiness={draft.readiness}
-            isEdit={!!draft.workoutId}
-            onChange={setReadiness}
-          />
+      {/* Per-set progress */}
+      {totalSets > 0 && (
+        <div className="flex shrink-0 gap-[3px] px-4 pb-3">
+          {views.flatMap((v, exIdx) =>
+            v.ex.sets.map((s, setIdx) => {
+              const cur = activeSet && activeSet.exIdx === exIdx && activeSet.setIdx === setIdx;
+              return (
+                <div
+                  key={`${exIdx}-${setIdx}`}
+                  className={[
+                    "h-1 flex-1 rounded-full",
+                    s.done ? "bg-green" : cur ? "bg-amber" : "bg-line",
+                  ].join(" ")}
+                />
+              );
+            }),
+          )}
+        </div>
+      )}
 
-          {draft.exercises.map((ex, exIdx) => {
-            const meta = exerciseById(ex.exerciseId);
-            const exUnit = ex.unit ?? unit;
-            const exType = meta?.exercise_type ?? "weight_reps";
-            const isBodyweight = meta?.equipment === "bodyweight";
+      {/* Exercise list */}
+      <div ref={scrollRef} className="relative flex-1 overflow-y-auto">
+        <div
+          className={[
+            "mx-auto flex max-w-3xl flex-col gap-2 px-4 pt-1",
+            keypad ? "pb-[460px]" : restActive ? "pb-44" : "pb-32",
+          ].join(" ")}
+        >
+          {views.map((v, exIdx) => {
+            const { ex, meta } = v;
+            const color = MUSCLE_COLORS[meta?.muscle_group ?? "core"];
             const pinned = exerciseNotes[ex.exerciseId];
-            const sessions =
-              draft.workoutId || !meta ? [] : recentSessionsFor(workouts, ex.exerciseId);
-            const suggestion =
-              sessions.length && meta ? suggestNextLoad(meta, sessions, exUnit) : null;
-            const lastSets = sessions[0] ?? [];
-            const prevHints = prevHintsFor(lastSets, ex.sets.map((s) => s.setType), exUnit);
-            const nextLinked = draft.exercises[exIdx + 1]?.linkedWithPrev ?? false;
-            const inSuperset = ex.linkedWithPrev || nextLinked;
+            const isExpanded = exIdx === expandedIdx;
+            const complete = ex.sets.length > 0 && v.doneCount === ex.sets.length;
+            const inSuperset = ex.linkedWithPrev || (draft.exercises[exIdx + 1]?.linkedWithPrev ?? false);
+
+            if (!isExpanded) {
+              return (
+                <button
+                  key={`${ex.exerciseId}-${exIdx}`}
+                  data-ex-card={exIdx}
+                  onClick={() => expandExercise(exIdx)}
+                  className={[
+                    "flex items-center gap-3 rounded-[20px] border bg-surface px-3.5 py-2.5 text-left shadow-[var(--rp-shadow-sm)]",
+                    inSuperset ? "border-amber/40" : "border-line-2",
+                  ].join(" ")}
+                >
+                  <span style={{ color }}>
+                    <ExerciseIcon name={meta?.name} pattern={meta?.movement_pattern ?? "other"} size={30} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-bold tracking-[-0.01em] text-ink">
+                      {meta?.name ?? "Exercise"}
+                    </span>
+                    <span className="mt-px block font-mono text-[10.5px] uppercase text-ink-faint">
+                      {collapsedMeta(v)}
+                    </span>
+                  </span>
+                  {complete ? (
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green">
+                      <Icon name="check" size={13} color="var(--color-on-green)" sw={2.6} />
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-ink-faint">
+                      <Icon name="chevron" size={16} color="currentColor" style={{ transform: "rotate(90deg)" }} />
+                    </span>
+                  )}
+                </button>
+              );
+            }
+
             return (
-              <div key={`${ex.exerciseId}-${exIdx}`}>
-                {/* Superset link toggle between adjacent cards */}
-                {exIdx > 0 ? (
-                  <div className="flex justify-center py-1.5">
-                    <button
-                      onClick={() => toggleLink(exIdx)}
-                      aria-pressed={ex.linkedWithPrev}
-                      title="Superset with the exercise above"
-                      className={[
-                        "flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors",
-                        ex.linkedWithPrev
-                          ? "bg-amber/15 text-amber"
-                          : "border border-line text-ink-faint hover:text-ink-soft",
-                      ].join(" ")}
-                    >
-                      <Icon name="link" size={13} color="currentColor" />
-                      {ex.linkedWithPrev ? "Superset" : "Link"}
-                    </button>
+              <div
+                key={`${ex.exerciseId}-${exIdx}`}
+                data-ex-card={exIdx}
+                className={[
+                  "rounded-[24px] border bg-surface px-3.5 pb-1.5 pt-4 shadow-[var(--rp-shadow-sm)]",
+                  inSuperset ? "border-amber/40" : "border-line-2",
+                ].join(" ")}
+              >
+                <div className="mb-1 flex items-center gap-3">
+                  <span style={{ color }}>
+                    <ExerciseIcon name={meta?.name} pattern={meta?.movement_pattern ?? "other"} size={38} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[21px] font-bold tracking-[-0.02em] text-ink">
+                      {meta?.name ?? "Exercise"}
+                    </div>
+                    <div className="mt-0.5 truncate whitespace-nowrap font-mono text-[11px] uppercase text-ink-faint">
+                      {[
+                        meta?.equipment,
+                        meta ? MUSCLE_LABELS[meta.muscle_group] : null,
+                        ex.sets.length > 0 ? `TARGET ${ex.sets.length} × ${effectiveValues(ex.sets[0], v.prevHints[0]).reps || "?"}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
                   </div>
-                ) : (
-                  <div className="pt-4" />
+                  {v.suggestion && (
+                    <button
+                      onClick={() => applySuggestion(exIdx, v.suggestion!, v.isDuration)}
+                      title={SUGGESTION_TITLE[v.suggestion.kind]}
+                      aria-label={`Apply suggested load for ${meta?.name ?? "exercise"}`}
+                      className={`shrink-0 rounded-full px-2.5 py-1.5 font-mono text-[11px] font-semibold ${SUGGESTION_CLASS[v.suggestion.kind]}`}
+                    >
+                      {suggestionLabel(v.suggestion, v.exUnit)}
+                    </button>
+                  )}
+                </div>
+
+                {pinned && (
+                  <button
+                    onClick={() => editPinnedNote(ex.exerciseId, meta?.name ?? "this exercise")}
+                    className="flex w-full items-center gap-1.5 px-1 pb-2 pt-1 text-left"
+                    title="Edit pinned note"
+                  >
+                    <span className="shrink-0 text-amber">
+                      <Icon name="pin" size={13} color="currentColor" />
+                    </span>
+                    <span className="truncate text-[12.5px] text-ink-soft">{pinned}</span>
+                  </button>
                 )}
 
                 <div
-                  className={[
-                    "rounded-[24px] border bg-surface p-4 shadow-[var(--rp-shadow-sm)]",
-                    inSuperset ? "border-amber/50" : "border-line-2",
-                  ].join(" ")}
+                  className="grid items-center gap-2 px-1 pb-1.5"
+                  style={{ gridTemplateColumns: SET_GRID_COLS }}
                 >
-                  <div className="mb-2 flex items-center gap-3">
-                    <span style={{ color: MUSCLE_COLORS[meta?.muscle_group ?? "core"] }}>
-                      <ExerciseIcon name={meta?.name} pattern={meta?.movement_pattern ?? "other"} size={34} />
+                  {["SET", "PREVIOUS", v.isBodyweight ? `+${v.exUnit}` : v.exUnit, v.isDuration ? "SEC" : "REPS", ""].map((h, i) => (
+                    <span key={i} className="rp-eyebrow" style={{ fontSize: 9.5, textAlign: i >= 2 ? "center" : "left" }}>
+                      {h}
                     </span>
-                    <button
-                      onClick={() => setSwappingIdx(exIdx)}
-                      className="flex-1 text-left text-lg font-bold tracking-[-0.015em] text-ink hover:text-green-ink"
-                      title="Change exercise"
-                    >
-                      {meta?.name ?? "Exercise"}
-                    </button>
-                    <button
-                      onClick={() => toggleUnit(exIdx)}
-                      aria-label={`Toggle units (currently ${exUnit})`}
-                      className="rounded border border-line px-1.5 py-0.5 text-xs text-ink-soft hover:text-ink"
-                      title="Toggle kg / lb"
-                    >
-                      {exUnit}
-                    </button>
-                    <button
-                      onClick={() => removeExerciseWithUndo(exIdx)}
-                      aria-label={`Remove ${meta?.name ?? "exercise"}`}
-                      title="Remove exercise"
-                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-faint hover:border-danger/50 hover:bg-surface-2 hover:text-danger-soft"
-                    >
-                      <Icon name="trash" size={17} color="currentColor" />
-                    </button>
-                  </div>
-
-                  {pinned && (
-                    <button
-                      onClick={() => editPinnedNote(ex.exerciseId, meta?.name ?? "this exercise")}
-                      className="mb-2 flex w-full items-start gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-left"
-                      title="Edit pinned note"
-                    >
-                      <span className="mt-0.5 shrink-0 text-amber">
-                        <Icon name="pin" size={13} color="currentColor" />
-                      </span>
-                      <span className="text-[13px] text-ink-soft">{pinned}</span>
-                    </button>
-                  )}
-
-                  {suggestion && (
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="min-w-0 truncate font-mono text-[11px] text-ink-faint">
-                        Last {lastSessionSummary(lastSets, exUnit)}
-                      </span>
-                      <button
-                        onClick={() => applySuggestion(exIdx, suggestion, exType === "duration")}
-                        title={SUGGESTION_TITLE[suggestion.kind]}
-                        aria-label={`Apply suggested load for ${meta?.name ?? "exercise"}`}
-                        className={`shrink-0 rounded-full px-3 py-1 font-mono text-xs font-bold ${SUGGESTION_CLASS[suggestion.kind]}`}
-                      >
-                        {suggestionLabel(suggestion, exUnit)}
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="mb-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
-                    <span className="w-6 text-center">#</span>
-                    <span className="w-12 text-center">Type</span>
-                    <span className="flex-1 text-center">
-                      {isBodyweight ? `+ Weight (${exUnit})` : `Weight (${exUnit})`}
-                    </span>
-                    <span className="flex-1 text-center">{exType === "duration" ? "Time (s)" : "Reps"}</span>
-                    <span className="w-14 text-center">RPE</span>
-                    <span className="w-9 shrink-0" aria-hidden="true" />
-                    <span className="w-7 shrink-0" aria-hidden="true" />
-                  </div>
-
-                  {ex.sets.map((set, setIdx) => (
-                    <SetRow
-                      key={setIdx}
-                      exIdx={exIdx}
-                      setIdx={setIdx}
-                      set={set}
-                      unit={exUnit}
-                      exerciseType={exType}
-                      isBodyweight={isBodyweight}
-                      restSeconds={ex.restSeconds}
-                      prev={prevHints[setIdx]}
-                    />
                   ))}
+                </div>
 
+                {ex.sets.map((set, setIdx) => (
+                  <SetRow
+                    key={setIdx}
+                    exIdx={exIdx}
+                    setIdx={setIdx}
+                    set={set}
+                    unit={v.exUnit}
+                    exerciseType={v.isDuration ? "duration" : "weight_reps"}
+                    isBodyweight={v.isBodyweight}
+                    prev={v.prevHints[setIdx]}
+                    active={setIdx === v.activeSetIdx}
+                    focusField={
+                      keypad && keypad.exIdx === exIdx && keypad.setIdx === setIdx ? keypad.field : null
+                    }
+                    onTapValue={(field) => {
+                      if (set.done) return;
+                      setKeypad({ exIdx, setIdx, field });
+                    }}
+                    onToggleDone={() => toggleDone(exIdx, setIdx)}
+                  />
+                ))}
+
+                <div className="mt-1.5 flex items-center justify-between border-t border-line-2 px-1 py-2.5">
                   <button
                     onClick={() => addSet(exIdx)}
-                    className="mt-2 flex w-full items-center justify-center gap-1.5 border-t border-line-2 pt-3 text-sm font-semibold text-green-ink"
+                    className="flex items-center gap-1.5 text-[14px] font-semibold text-green-ink"
                   >
                     <Icon name="plus" size={16} color="currentColor" sw={2.2} />
                     Add set
                   </button>
-
-                  <div className="mt-2 flex items-start gap-2 border-t border-line-2 pt-3">
-                    <span className="mt-1.5 shrink-0 text-ink-faint">
-                      <Icon name="edit" size={15} color="currentColor" />
-                    </span>
-                    <textarea
-                      value={ex.notes ?? ""}
-                      onChange={(e) => setExerciseNotes(exIdx, e.target.value)}
-                      rows={1}
-                      aria-label={`Notes for ${meta?.name ?? "exercise"}`}
-                      placeholder="Add a note…"
-                      className="min-h-[2rem] w-full resize-y bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
-                    />
-                    {!pinned && (
-                      <button
-                        onClick={() => editPinnedNote(ex.exerciseId, meta?.name ?? "this exercise")}
-                        aria-label={`Pin a note for ${meta?.name ?? "exercise"}`}
-                        title="Pin a note that shows every workout"
-                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-faint hover:text-amber"
-                      >
-                        <Icon name="pin" size={15} color="currentColor" />
-                      </button>
-                    )}
-                  </div>
+                  <span className="flex items-center gap-1.5 font-mono text-[11.5px] uppercase text-ink-faint">
+                    <Icon name="timer" size={14} color="currentColor" />
+                    REST {fmtRest(ex.restSeconds ?? restDuration)}
+                  </span>
                 </div>
               </div>
             );
@@ -496,67 +622,192 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
 
           <button
             onClick={() => setPicking(true)}
-            className="mt-4 flex items-center justify-center gap-1.5 rounded-full border border-line bg-surface py-3 font-semibold text-ink-soft hover:text-ink"
+            className="flex items-center justify-center gap-1.5 rounded-[20px] border border-dashed border-line py-3 font-semibold text-ink-soft hover:text-ink"
           >
             <Icon name="plus" size={17} color="currentColor" sw={2.2} />
             Add exercise
           </button>
+        </div>
+      </div>
 
-          {/* Workout comment — saved to workouts.notes */}
-          <div className="mt-4 rounded-[24px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
-            <span className="rp-eyebrow">Workout comment</span>
-            <textarea
-              value={draft.notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              aria-label="Workout comment"
-              placeholder="How did it go? (optional)"
-              className="mt-2 min-h-[2.5rem] w-full resize-y bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
+      {/* Sticky footer: log action / rest dock (keypad overlays both) */}
+      {!keypad && (
+        <div
+          className={[
+            "fixed inset-x-0 bottom-0 mx-auto w-full max-w-3xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3",
+            restActive ? "" : "border-t border-line-2",
+          ].join(" ")}
+          style={{
+            background: "color-mix(in srgb, var(--color-bg) 86%, transparent)",
+            backdropFilter: "blur(16px)",
+          }}
+        >
+          {restActive ? (
+            <RestDock nextHint={activeSummary ? `NEXT · SET ${activeSummary.n} — ${activeSummary.what}` : null} />
+          ) : (
+            <div className="flex items-center gap-2.5">
+              {activeSummary && activeSet ? (
+                <button
+                  onClick={() => commitSet(activeSet.exIdx, activeSet.setIdx, false)}
+                  className="flex h-[50px] flex-1 items-center justify-center gap-2 rounded-full bg-amber text-[15.5px] font-bold text-on-amber"
+                >
+                  <Icon name="check" size={17} color="currentColor" sw={2.6} />
+                  Log set {activeSummary.n} — {activeSummary.what}
+                </button>
+              ) : (
+                <button
+                  onClick={onFinish}
+                  disabled={saving}
+                  className="flex h-[50px] flex-1 items-center justify-center gap-2 rounded-full bg-green text-[15.5px] font-bold text-on-green disabled:opacity-60"
+                >
+                  {saving ? "Saving…" : draft.workoutId ? `Save changes (${completedSets} sets)` : `Finish (${completedSets} sets)`}
+                </button>
+              )}
+              <button
+                onClick={() => setActionsOpen(true)}
+                aria-label="Workout actions"
+                className="flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full border border-line bg-surface text-ink-soft"
+              >
+                <Icon name="dots" size={18} color="currentColor" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Keypad sheet */}
+      {keypad && keypadView && keypadSet && (
+        <KeypadSheet
+          key={`${keypad.exIdx}:${keypad.setIdx}`}
+          exerciseName={keypadView.meta?.name ?? "Exercise"}
+          setNumber={keypad.setIdx + 1}
+          totalSets={keypadView.ex.sets.length}
+          prev={keypadView.prevHints[keypad.setIdx]}
+          field={keypad.field}
+          values={effectiveValues(keypadSet, keypadView.prevHints[keypad.setIdx])}
+          rpe={keypadSet.rpe}
+          unit={keypadView.exUnit}
+          isBodyweight={keypadView.isBodyweight}
+          isDuration={keypadView.isDuration}
+          equipment={keypadView.meta?.equipment ?? "other"}
+          onField={(field) => setKeypad({ ...keypad, field })}
+          onInput={(field, value) => updateSet(keypad.exIdx, keypad.setIdx, { [field]: value })}
+          onRpe={(rpe) => updateSet(keypad.exIdx, keypad.setIdx, { rpe })}
+          onLog={() => commitSet(keypad.exIdx, keypad.setIdx, true)}
+          onClose={() => setKeypad(null)}
+        />
+      )}
+
+      {/* ⋯ actions sheet */}
+      {actionsOpen && (
+        <div className="fixed inset-0 z-20 flex items-end" onClick={() => setActionsOpen(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="sheet-up relative mx-auto w-full max-w-3xl rounded-t-[28px] bg-bg px-5 pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-2.5"
+            style={{ boxShadow: "0 -12px 40px rgba(43,39,37,0.25)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-3 h-1 w-[38px] rounded-full bg-line" />
+            {expanded && (
+              <>
+                <div className="rp-eyebrow mb-1 px-1">{expanded.meta?.name ?? "Exercise"}</div>
+                <SheetRow
+                  label="Change exercise"
+                  icon={<Icon name="edit" size={17} color="currentColor" />}
+                  onTap={() => {
+                    setActionsOpen(false);
+                    setSwappingIdx(expandedIdx);
+                  }}
+                />
+                {expandedIdx > 0 && (
+                  <SheetRow
+                    label={expanded.ex.linkedWithPrev ? "Unlink superset" : "Superset with previous"}
+                    icon={<Icon name="link" size={17} color="currentColor" />}
+                    detail={expanded.ex.linkedWithPrev ? "LINKED" : undefined}
+                    onTap={() => {
+                      toggleLink(expandedIdx);
+                      setActionsOpen(false);
+                    }}
+                  />
+                )}
+                <SheetRow
+                  label="Switch units"
+                  detail={expanded.exUnit.toUpperCase()}
+                  icon={<Icon name="filter" size={17} color="currentColor" />}
+                  onTap={() => toggleUnit(expandedIdx)}
+                />
+                <SheetRow
+                  label="Pinned note"
+                  detail={exerciseNotes[expanded.ex.exerciseId] ? "SET" : undefined}
+                  icon={<Icon name="pin" size={17} color="currentColor" />}
+                  onTap={() => {
+                    setActionsOpen(false);
+                    editPinnedNote(expanded.ex.exerciseId, expanded.meta?.name ?? "this exercise");
+                  }}
+                />
+                <SheetRow
+                  label="Session note"
+                  detail={expanded.ex.notes ? "SET" : undefined}
+                  icon={<Icon name="edit" size={17} color="currentColor" />}
+                  onTap={() => {
+                    setActionsOpen(false);
+                    editSessionNote(expandedIdx, expanded.meta?.name ?? "this exercise");
+                  }}
+                />
+                <SheetRow
+                  label="Remove exercise"
+                  danger
+                  icon={<Icon name="trash" size={17} color="currentColor" />}
+                  onTap={() => {
+                    setActionsOpen(false);
+                    removeExerciseWithUndo(expandedIdx);
+                  }}
+                />
+                <div className="my-2 h-px bg-line" />
+              </>
+            )}
+            <div className="rp-eyebrow mb-1 px-1">Workout</div>
+            <SheetRow
+              label="Workout comment"
+              detail={draft.notes ? "SET" : undefined}
+              icon={<Icon name="edit" size={17} color="currentColor" />}
+              onTap={() => {
+                setActionsOpen(false);
+                editWorkoutComment();
+              }}
+            />
+            {!draft.workoutId && (
+              <SheetRow
+                label="Save as template"
+                icon={<Icon name="target" size={17} color="currentColor" />}
+                onTap={() => {
+                  setActionsOpen(false);
+                  saveAsTemplate();
+                }}
+              />
+            )}
+            <SheetRow
+              label={draft.workoutId ? "Discard changes" : "Discard workout"}
+              danger
+              icon={<Icon name="trash" size={17} color="currentColor" />}
+              onTap={() => {
+                setActionsOpen(false);
+                onDiscard();
+              }}
             />
           </div>
         </div>
-      </div>
-
-      {/* Bottom action bar */}
-      <div
-        className="shrink-0 border-t border-line-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
-        style={{ background: "color-mix(in srgb, var(--color-bg) 86%, transparent)", backdropFilter: "blur(16px)" }}
-      >
-        <div className="mx-auto flex max-w-3xl gap-2">
-          <button
-            onClick={onFinish}
-            disabled={saving}
-            className="flex-1 rounded-full bg-green py-3 font-bold text-on-green hover:opacity-95 disabled:opacity-60"
-          >
-            {saving
-              ? "Saving…"
-              : draft.workoutId
-                ? `Save changes (${completedSets} sets)`
-                : `Finish (${completedSets} sets)`}
-          </button>
-          {!draft.workoutId && (
-            <button
-              onClick={saveAsTemplate}
-              disabled={saving || draft.exercises.length === 0}
-              className="rounded-full border border-line bg-surface-2 px-3 py-3 text-sm text-ink-soft hover:text-ink disabled:opacity-50"
-            >
-              Template
-            </button>
-          )}
-          <button
-            onClick={onDiscard}
-            className="rounded-full border border-line px-3 py-3 text-sm text-ink-faint hover:border-danger/50 hover:text-danger-soft"
-          >
-            Discard
-          </button>
-        </div>
-      </div>
+      )}
 
       {picking && (
         <ExercisePicker
           onPick={(id) => {
             addExercise(id);
             setPicking(false);
+            const idx = draft.exercises.length; // appended at the end
+            setExpandedIdx(idx);
+            setKeypad(null);
+            scrollToCard(idx);
           }}
           onClose={() => setPicking(false)}
         />

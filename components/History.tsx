@@ -5,6 +5,9 @@ import { useStore } from "@/lib/store";
 import { deleteWorkout } from "@/lib/db";
 import { confirmDialog } from "@/lib/dialog";
 import { toast } from "@/lib/toast";
+import { MUSCLE_COLORS } from "@/lib/muscles";
+import type { MovementPattern } from "@/lib/types";
+import { ExerciseIcon } from "./ExerciseIcon";
 import { Eyebrow, Icon } from "./ShojinUI";
 
 function fmtDuration(s: number | null) {
@@ -32,23 +35,33 @@ export function History({ onStart, onNew }: { onStart: () => void; onNew: () => 
       .sort((a, b) => b.performed_at.localeCompare(a.performed_at))
       .map((w) => {
         const seen = new Set<string>();
-        const exerciseNames: string[] = [];
+        const sessionExercises: { name: string; pattern: MovementPattern; color: string }[] = [];
         let volume = 0;
         for (const s of w.sets) {
           if (!s.is_warmup) volume += s.weight * s.reps;
           if (!seen.has(s.exercise_id)) {
             seen.add(s.exercise_id);
             const ex = exMap.get(s.exercise_id);
-            if (ex) exerciseNames.push(ex.name);
+            if (ex)
+              sessionExercises.push({
+                name: ex.name,
+                pattern: ex.movement_pattern,
+                color: MUSCLE_COLORS[ex.muscle_group],
+              });
           }
         }
+        const rpes = w.sets.filter((s) => s.completed && s.rpe != null).map((s) => s.rpe!);
+        const rpeAvg = rpes.length
+          ? Math.round((rpes.reduce((a, b) => a + b, 0) / rpes.length) * 10) / 10
+          : null;
         const d = new Date(w.performed_at);
         const workingSetCount = w.sets.filter((s) => !s.is_warmup && s.completed).length;
         return {
           ...w,
-          exerciseNames,
+          sessionExercises,
           workingSetCount,
           volume,
+          rpeAvg,
           dow: d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
           dnum: String(d.getDate()).padStart(2, "0"),
         };
@@ -122,76 +135,71 @@ export function History({ onStart, onNew }: { onStart: () => void; onNew: () => 
         <>
           <div className="flex items-center justify-between">
             <Eyebrow>{allWorkouts.length} SESSIONS</Eyebrow>
-            <div className="font-mono text-xs text-ink-soft">{fmtK(totalVolume)} kg total</div>
+            <div className="font-mono text-xs text-ink-soft">{fmtK(totalVolume)} kg lifetime</div>
           </div>
 
-          <ul className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-2.5">
             {allWorkouts.map((w) => {
               const dur = fmtDuration(w.duration_seconds);
+              const meta = [
+                `${w.workingSetCount} SETS`,
+                dur ? dur.toUpperCase() : null,
+                w.readiness_sleep != null ? `SLEEP ${w.readiness_sleep}` : null,
+                w.rpeAvg != null ? `RPE Ø${w.rpeAvg}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
               return (
                 <li
                   key={w.id}
-                  className="rounded-[28px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]"
+                  className="rounded-[28px] border border-line-2 bg-surface p-3.5 shadow-[var(--rp-shadow-sm)]"
                 >
-                  <div className="flex items-center gap-3.5">
-                    <div className="flex w-10 shrink-0 flex-col items-center">
-                      <div className="rp-eyebrow" style={{ fontSize: 10 }}>{w.dow}</div>
-                      <div className="font-mono text-xl font-bold leading-tight text-ink">{w.dnum}</div>
+                  <button
+                    onClick={() => editWorkout(w)}
+                    className="flex w-full items-center gap-3 text-left"
+                    title="Open and edit this workout"
+                  >
+                    <div className="w-10 shrink-0 text-center">
+                      <div className="rp-eyebrow" style={{ fontSize: 9 }}>{w.dow}</div>
+                      <div className="mt-px font-mono text-[19px] font-bold leading-tight text-ink">{w.dnum}</div>
                     </div>
                     <div className="w-px self-stretch bg-line-2" />
                     <div className="min-w-0 flex-1">
-                      <span className="text-[16.5px] font-bold tracking-[-0.015em] text-ink">{w.name}</span>
-                      <div className="mt-1 font-mono text-[11.5px] text-ink-faint">
-                        {w.workingSetCount} sets{dur ? ` · ${dur}` : ""}
-                      </div>
+                      <div className="truncate text-base font-bold tracking-[-0.015em] text-ink">{w.name}</div>
+                      <div className="mt-0.5 truncate font-mono text-[10.5px] text-ink-faint">{meta}</div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-mono text-sm font-semibold text-ink">{fmtK(w.volume)}</div>
-                      <div className="rp-eyebrow" style={{ fontSize: 9 }}>KG</div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-mono text-sm font-bold text-ink">{fmtK(w.volume)}</div>
+                      <div className="rp-eyebrow" style={{ fontSize: 8.5 }}>KG VOL</div>
                     </div>
-                  </div>
+                  </button>
 
-                  {w.exerciseNames.length > 0 && (
-                    <p className="mt-2.5 truncate font-mono text-[11px] text-ink-faint">
-                      {w.exerciseNames.join(" · ")}
-                    </p>
-                  )}
-
-                  {(w.readiness_sleep != null ||
-                    w.readiness_energy != null ||
-                    w.readiness_soreness != null) && (
-                    <p className="mt-1.5 font-mono text-[11px] text-ink-faint">
-                      Sleep {w.readiness_sleep ?? "–"} · Energy {w.readiness_energy ?? "–"} ·
-                      Soreness {w.readiness_soreness ?? "–"}
-                    </p>
-                  )}
-
-                  {w.notes && (
-                    <p className="mt-1.5 text-[12.5px] italic text-ink-soft">“{w.notes}”</p>
-                  )}
-
-                  <div className="mt-3 flex gap-2 border-t border-line-2 pt-3">
-                    <button
-                      onClick={() => editWorkout(w)}
-                      className="rounded-full border border-line px-4 py-1.5 text-sm font-semibold text-ink-soft hover:text-ink"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => repeatWorkout(w)}
-                      className="flex items-center gap-1.5 rounded-full bg-green-soft px-4 py-1.5 text-sm font-semibold text-green-ink"
-                    >
-                      <Icon name="play" size={13} color="currentColor" />
-                      Repeat
-                    </button>
+                  <div className="mt-2.5 flex items-center gap-1.5 border-t border-line-2 pt-2.5">
+                    <div className="flex min-w-0 flex-1 gap-1.5 overflow-hidden">
+                      {w.sessionExercises.slice(0, 6).map((ex, i) => (
+                        <span key={i} className="shrink-0" style={{ color: ex.color }} title={ex.name}>
+                          <ExerciseIcon name={ex.name} pattern={ex.pattern} size={24} />
+                        </span>
+                      ))}
+                    </div>
+                    {w.notes && (
+                      <span className="max-w-[30%] truncate font-mono text-[10px] text-ink-faint">“{w.notes}”</span>
+                    )}
                     <button
                       onClick={() => removeWorkout(w.id, w.name)}
                       disabled={deletingId === w.id}
                       aria-label={`Delete ${w.name}`}
-                      className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-ink-faint hover:bg-surface-2 hover:text-danger-soft disabled:opacity-40"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-surface-2 hover:text-danger-soft disabled:opacity-40"
                       title="Delete workout"
                     >
-                      {deletingId === w.id ? "…" : <Icon name="trash" size={17} color="currentColor" />}
+                      {deletingId === w.id ? "…" : <Icon name="trash" size={15} color="currentColor" />}
+                    </button>
+                    <button
+                      onClick={() => repeatWorkout(w)}
+                      className="flex shrink-0 items-center gap-1.5 rounded-full bg-green-soft px-3.5 py-1.5 font-mono text-xs font-bold text-green-ink"
+                    >
+                      <Icon name="play" size={11} color="currentColor" />
+                      Repeat
                     </button>
                   </div>
                 </li>

@@ -153,6 +153,7 @@ export interface PrevHint {
   weight: number;
   reps: number;
   seconds: number;
+  rpe: number | null;
 }
 
 /** Last session's values converted into the draft's unit, aligned to the
@@ -174,6 +175,7 @@ export function prevHintsFor(
       weight: round2(convert(s.weight, s.unit, targetUnit)),
       reps: s.reps,
       seconds: s.duration_seconds ?? 0,
+      rpe: s.rpe ?? null,
     };
   });
 }

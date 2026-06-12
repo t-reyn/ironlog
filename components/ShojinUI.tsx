@@ -25,7 +25,9 @@ type IconName =
   | "moon"
   | "trash"
   | "link"
-  | "pin";
+  | "pin"
+  | "backspace"
+  | "dots";
 
 export function Icon({
   name,
@@ -139,6 +141,19 @@ export function Icon({
       </>
     ),
     pin: <path d="M9 4h6l-1 6 3.5 3.5H6.5L10 10zM12 13.5V20" {...p} />,
+    backspace: (
+      <>
+        <path d="M8.5 5h10A1.5 1.5 0 0 1 20 6.5v11a1.5 1.5 0 0 1-1.5 1.5h-10L3 12z" fill="none" stroke={color} strokeWidth={sw} strokeLinejoin="round" />
+        <path d="M11.5 9.5l5 5M16.5 9.5l-5 5" stroke={color} strokeWidth={sw} strokeLinecap="round" />
+      </>
+    ),
+    dots: (
+      <>
+        <circle cx="5" cy="12" r="1.9" fill={color} stroke="none" />
+        <circle cx="12" cy="12" r="1.9" fill={color} stroke="none" />
+        <circle cx="19" cy="12" r="1.9" fill={color} stroke="none" />
+      </>
+    ),
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" style={style} aria-hidden="true">

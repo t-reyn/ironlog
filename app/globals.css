@@ -216,6 +216,16 @@
   animation: timer-flash 0.7s ease-in-out 3;
 }
 
+/* bottom sheets (keypad, rest dock, start sheet) slide up on mount */
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.sheet-up { animation: sheet-up 0.22s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .sheet-up { animation: none; }
+}
+
 /* gentle nudge for the iOS "tap Share" install hint */
 @keyframes shojin-nudge {
   0%, 100% { transform: translateY(0); }

@@ -1,56 +1,134 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { deleteTemplate, type TemplateWithSets } from "@/lib/db";
 import { confirmDialog } from "@/lib/dialog";
 import { toast } from "@/lib/toast";
 import { MUSCLE_COLORS } from "@/lib/muscles";
+import type { MovementPattern, Readiness } from "@/lib/types";
 import { ExerciseIcon } from "./ExerciseIcon";
+import { Icon } from "./ShojinUI";
 import { TemplateBuilder } from "./TemplateBuilder";
 import { TemplateEditor } from "./TemplateEditor";
 
-type View = "home" | "repeat" | "template";
+const READINESS_ROWS: { key: keyof Readiness; label: string; hint: string }[] = [
+  { key: "sleep", label: "Sleep", hint: "poor → great" },
+  { key: "energy", label: "Energy", hint: "drained → fresh" },
+  { key: "soreness", label: "Soreness", hint: "none → very sore" },
+];
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+/** ~3.5 min per set, rounded to a friendly 5. */
+function estimateMinutes(setCount: number): number {
+  return Math.max(5, Math.round((setCount * 3.5) / 5) * 5);
+}
+
+function TemplateCard({
+  template,
+  icons,
+  onStart,
+  onManage,
+}: {
+  template: TemplateWithSets;
+  icons: { name: string | null; pattern: MovementPattern; color: string }[];
+  onStart: () => void;
+  onManage: () => void;
+}) {
+  const pressTimer = useRef<number | null>(null);
+  const longPressed = useRef(false);
+
+  const exCount = new Set(template.sets.map((s) => s.exercise_id)).size;
+  const setCount = template.sets.length;
+
+  function pressStart() {
+    longPressed.current = false;
+    pressTimer.current = window.setTimeout(() => {
+      longPressed.current = true;
+      onManage();
+    }, 550);
+  }
+  function pressEnd() {
+    if (pressTimer.current !== null) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
+
+  return (
+    <div
+      onPointerDown={pressStart}
+      onPointerUp={pressEnd}
+      onPointerLeave={pressEnd}
+      onPointerMove={pressEnd}
+      onContextMenu={(e) => e.preventDefault()}
+      className="flex items-center gap-3 rounded-[22px] border border-line-2 bg-surface px-3.5 py-3 shadow-[var(--rp-shadow-sm)]"
+      title="Hold to edit or delete"
+    >
+      <div className="flex shrink-0">
+        {icons.map((ic, i) => (
+          <span key={i} style={{ color: ic.color, marginLeft: i > 0 ? -8 : 0 }}>
+            <ExerciseIcon name={ic.name} pattern={ic.pattern} size={28} />
+          </span>
+        ))}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[15.5px] font-bold tracking-[-0.01em] text-ink">{template.name}</div>
+        <div className="mt-0.5 truncate whitespace-nowrap font-mono text-[10.5px] uppercase text-ink-faint">
+          {exCount} EXERCISES · {setCount} SETS · ~{estimateMinutes(setCount)} MIN
+        </div>
+      </div>
+      <button
+        onClick={() => {
+          if (!longPressed.current) onStart();
+        }}
+        className="shrink-0 rounded-full bg-amber px-4 py-2 font-mono text-[12.5px] font-bold text-on-amber"
+      >
+        Start
+      </button>
+    </div>
+  );
 }
 
 export function StartModal({ onClose, onStart }: { onClose: () => void; onStart: () => void }) {
-  const [view, setView] = useState<View>("home");
-  const [editingTpl, setEditingTpl] = useState<TemplateWithSets | null>(null);
-  const [building, setBuilding] = useState(false);
-  const [busyTpl, setBusyTpl] = useState<string | null>(null);
-
   const workouts = useStore((s) => s.workouts);
-  const exercises = useStore((s) => s.exercises);
   const templates = useStore((s) => s.templates);
   const startBlank = useStore((s) => s.startBlank);
   const startFromWorkout = useStore((s) => s.startFromWorkout);
   const startFromTemplate = useStore((s) => s.startFromTemplate);
   const exerciseById = useStore((s) => s.exerciseById);
+  const setDraftReadiness = useStore((s) => s.setDraftReadiness);
   const refreshTemplates = useStore((s) => s.refreshTemplates);
   const draft = useStore((s) => s.draft);
 
-  const recentWorkouts = useMemo(() => {
-    const exMap = new Map(exercises.map((e) => [e.id, e]));
-    return [...workouts]
-      .sort((a, b) => b.performed_at.localeCompare(a.performed_at))
-      .slice(0, 8)
-      .map((w) => {
-        const seen = new Set<string>();
-        const exerciseNames: string[] = [];
-        for (const s of w.sets) {
-          if (!seen.has(s.exercise_id)) {
-            seen.add(s.exercise_id);
-            const ex = exMap.get(s.exercise_id);
-            if (ex) exerciseNames.push(ex.name);
-          }
-        }
-        const workingSetCount = w.sets.filter((s) => !s.is_warmup && s.completed).length;
-        return { ...w, exerciseNames, workingSetCount };
-      });
-  }, [workouts, exercises]);
+  const [building, setBuilding] = useState(false);
+  const [editingTpl, setEditingTpl] = useState<TemplateWithSets | null>(null);
+  const [managingTpl, setManagingTpl] = useState<TemplateWithSets | null>(null);
+  const [readinessOpen, setReadinessOpen] = useState(false);
+
+  const [dateLabel] = useState(() =>
+    new Date()
+      .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+      .replace(",", " ·")
+      .toUpperCase(),
+  );
+
+  const recent = useMemo(
+    () => [...workouts].sort((a, b) => b.performed_at.localeCompare(a.performed_at)).slice(0, 5),
+    [workouts],
+  );
+  const last = recent[0];
+
+  // Readiness moves here from the logger — defaults carry from the last session.
+  const [readiness, setReadiness] = useState<Readiness>(() => {
+    const w = [...useStore.getState().workouts].sort((a, b) =>
+      b.performed_at.localeCompare(a.performed_at),
+    )[0];
+    return {
+      sleep: w?.readiness_sleep ?? null,
+      energy: w?.readiness_energy ?? null,
+      soreness: w?.readiness_soreness ?? null,
+    };
+  });
 
   async function doStart(fn: () => void) {
     if (draft) {
@@ -64,202 +142,239 @@ export function StartModal({ onClose, onStart }: { onClose: () => void; onStart:
       if (!ok) return;
     }
     fn();
+    setDraftReadiness(readiness);
     onStart();
   }
 
-  async function removeTpl(id: string, name: string) {
+  async function removeTpl(t: TemplateWithSets) {
     const ok = await confirmDialog({
       title: "Delete template?",
-      message: `“${name}” will be permanently removed.`,
+      message: `“${t.name}” will be permanently removed.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       danger: true,
     });
     if (!ok) return;
-    setBusyTpl(id);
     try {
-      await deleteTemplate(id);
+      await deleteTemplate(t.id);
       await refreshTemplates();
-      toast.success(`Deleted “${name}”.`);
+      toast.success(`Deleted “${t.name}”.`);
     } catch {
       toast.error("Couldn't delete template.");
-    } finally {
-      setBusyTpl(null);
     }
   }
 
-  const title =
-    view === "home" ? "Start workout" : view === "repeat" ? "Repeat previous" : "Templates";
+  function tplIcons(t: TemplateWithSets) {
+    const ids = [...new Set(t.sets.map((s) => s.exercise_id))].slice(0, 3);
+    return ids.map((id) => {
+      const ex = exerciseById(id);
+      return {
+        name: ex?.name ?? null,
+        pattern: ex?.movement_pattern ?? "other",
+        color: MUSCLE_COLORS[ex?.muscle_group ?? "core"],
+      };
+    });
+  }
+
+  function recentMeta(w: (typeof recent)[number]): string {
+    const dow = new Date(w.performed_at)
+      .toLocaleDateString("en-US", { weekday: "short" })
+      .toUpperCase();
+    const sets = w.sets.filter((s) => !s.is_warmup && s.completed).length;
+    return `${dow} · ${sets} SETS`;
+  }
+
+  const answered = READINESS_ROWS.map((r) => readiness[r.key]);
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-3 sm:items-center"
-        onClick={onClose}
-      >
+      <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50" onClick={onClose}>
         <div
-          className="flex max-h-[85vh] w-full max-w-md flex-col rounded-xl border border-line bg-surface shadow-2xl"
+          className="sheet-up flex max-h-[88dvh] w-full max-w-3xl flex-col rounded-t-[28px] bg-bg"
+          style={{ boxShadow: "0 -12px 40px rgba(43,39,37,0.25)" }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center border-b border-line p-4">
-            <div className="w-10">
-              {view !== "home" && (
-                <button
-                  onClick={() => setView("home")}
-                  aria-label="Back"
-                  className="text-ink-soft hover:text-ink"
+          <button onClick={onClose} aria-label="Close" className="block h-5 w-full shrink-0 pt-2.5">
+            <span className="mx-auto block h-1 w-[38px] rounded-full bg-line" />
+          </button>
+
+          <div className="overflow-y-auto px-5 pb-[max(2.25rem,env(safe-area-inset-bottom))] pt-1">
+            <div className="mb-3.5 flex items-baseline justify-between">
+              <h2 className="text-[22px] font-bold tracking-[-0.02em] text-ink">Start training</h2>
+              <span className="font-mono text-[11px] text-ink-faint">{dateLabel}</span>
+            </div>
+
+            {/* readiness check-in — one compact row, expands to the steppers */}
+            <div className="mb-3.5 rounded-[18px] border border-line-2 bg-surface px-3.5 py-2.5 shadow-[var(--rp-shadow-sm)]">
+              <button
+                onClick={() => setReadinessOpen((v) => !v)}
+                aria-expanded={readinessOpen}
+                className="flex w-full items-center gap-2"
+              >
+                <span className="rp-eyebrow shrink-0" style={{ fontSize: 9.5 }}>
+                  READY?
+                </span>
+                {READINESS_ROWS.map(({ key, label }, i) => (
+                  <span key={key} className="flex flex-1 items-center justify-center gap-1.5">
+                    <span className="text-xs font-semibold text-ink-soft">{label}</span>
+                    <span className="font-mono text-xs font-bold text-ink">{answered[i] ?? "–"}</span>
+                  </span>
+                ))}
+                <span
+                  className="shrink-0 text-ink-faint transition-transform duration-150"
+                  style={{ display: "inline-block", transform: readinessOpen ? "rotate(-90deg)" : "rotate(90deg)" }}
                 >
-                  ←
-                </button>
+                  <Icon name="chevron" size={14} color="currentColor" />
+                </span>
+              </button>
+
+              {readinessOpen && (
+                <div className="mt-3 flex flex-col gap-2.5 pb-1">
+                  {READINESS_ROWS.map(({ key, label, hint }) => (
+                    <div key={key} className="flex items-center gap-2">
+                      <span className="w-[72px] shrink-0 text-[13px] font-semibold text-ink-soft" title={hint}>
+                        {label}
+                      </span>
+                      <div className="flex flex-1 gap-1.5">
+                        {[1, 2, 3, 4, 5].map((v) => {
+                          const on = readiness[key] === v;
+                          return (
+                            <button
+                              key={v}
+                              onClick={() => setReadiness((r) => ({ ...r, [key]: on ? null : v }))}
+                              aria-pressed={on}
+                              aria-label={`${label} ${v} of 5`}
+                              className={[
+                                "h-9 flex-1 rounded-lg text-sm font-semibold transition-colors",
+                                on
+                                  ? "bg-ink text-bg"
+                                  : "border border-line bg-surface-2 text-ink-faint hover:text-ink-soft",
+                              ].join(" ")}
+                            >
+                              {v}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-            <h2 className="flex-1 text-center font-semibold">{title}</h2>
-            <div className="w-10 text-right">
-              <button onClick={onClose} aria-label="Close" className="text-ink-faint hover:text-ink">
-                ✕
+
+            {/* quick start duo */}
+            <div className="mb-4 grid grid-cols-2 gap-2.5">
+              <button
+                onClick={() => doStart(startBlank)}
+                className="rounded-[22px] bg-green p-3.5 pb-3 text-left text-on-green"
+              >
+                <Icon name="plus" size={20} color="currentColor" sw={2.2} />
+                <div className="mt-2.5 text-[15px] font-bold">Empty workout</div>
+                <div className="mt-0.5 font-mono text-[10px] uppercase" style={{ color: "color-mix(in srgb, var(--rp-on-green) 60%, transparent)" }}>
+                  BUILD AS YOU GO
+                </div>
+              </button>
+              <button
+                onClick={() => last && doStart(() => startFromWorkout(last))}
+                disabled={!last}
+                className="rounded-[22px] border border-line-2 bg-surface p-3.5 pb-3 text-left shadow-[var(--rp-shadow-sm)] disabled:opacity-50"
+              >
+                <span className="text-amber">
+                  <Icon name="play" size={20} color="currentColor" />
+                </span>
+                <div className="mt-2.5 whitespace-nowrap text-[15px] font-bold text-ink">Repeat last</div>
+                <div className="mt-0.5 truncate font-mono text-[10px] uppercase text-ink-faint">
+                  {last ? `${last.name} · ${recentMeta(last).split(" · ")[0]}` : "NOTHING YET"}
+                </div>
               </button>
             </div>
-          </div>
 
-          <div className="flex-1 overflow-y-auto p-4">
-            {view === "home" && (
-              <div className="flex flex-col gap-3">
-                <button
-                  onClick={() => doStart(startBlank)}
-                  className="rounded-xl border border-line bg-night p-4 text-left hover:border-ember/50"
-                >
-                  <div className="font-medium text-ink">Empty workout</div>
-                  <div className="mt-0.5 text-sm text-ink-faint">Start from scratch</div>
-                </button>
-
-                {recentWorkouts.length > 0 && (
-                  <button
-                    onClick={() => setView("repeat")}
-                    className="rounded-xl border border-line bg-night p-4 text-left hover:border-ember/50"
-                  >
-                    <div className="font-medium text-ink">Repeat previous</div>
-                    <div className="mt-0.5 text-sm text-ink-faint">
-                      Pick from your last {recentWorkouts.length} workout
-                      {recentWorkouts.length !== 1 ? "s" : ""}
-                    </div>
-                  </button>
-                )}
-
-                <button
-                  onClick={() => setView("template")}
-                  className="rounded-xl border border-line bg-night p-4 text-left hover:border-ember/50"
-                >
-                  <div className="font-medium text-ink">Use a template</div>
-                  <div className="mt-0.5 text-sm text-ink-faint">
-                    {templates.length > 0
-                      ? `${templates.length} template${templates.length !== 1 ? "s" : ""} saved`
-                      : "Create your first template"}
-                  </div>
-                </button>
+            {/* templates inline */}
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="rp-eyebrow">TEMPLATES</span>
+              <button onClick={() => setBuilding(true)} className="text-[13px] font-semibold text-green-ink">
+                + New
+              </button>
+            </div>
+            {templates.length === 0 ? (
+              <p className="mb-4 px-1 text-sm text-ink-faint">No templates yet — save one from a workout, or create one.</p>
+            ) : (
+              <div className="mb-4 flex flex-col gap-2">
+                {templates.map((t) => (
+                  <TemplateCard
+                    key={t.id}
+                    template={t}
+                    icons={tplIcons(t)}
+                    onStart={() => doStart(() => startFromTemplate(t))}
+                    onManage={() => setManagingTpl(t)}
+                  />
+                ))}
               </div>
             )}
 
-            {view === "repeat" && (
-              <ul className="flex flex-col gap-2">
-                {recentWorkouts.map((w) => (
-                  <li key={w.id}>
-                    <button
-                      onClick={() => doStart(() => startFromWorkout(w))}
-                      className="w-full rounded-xl border border-line bg-night p-3 text-left hover:border-ember/50"
-                    >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="font-medium text-ink">{w.name}</span>
-                        <span className="shrink-0 text-xs text-ink-faint">
-                          {fmtDate(w.performed_at)}
-                        </span>
-                      </div>
-                      <div className="mt-0.5 text-xs text-ink-soft">{w.workingSetCount} sets</div>
-                      {w.exerciseNames.length > 0 && (
-                        <p className="mt-1 truncate text-xs text-ink-faint">
-                          {w.exerciseNames.join(" · ")}
-                        </p>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {view === "template" && (
+            {/* recent one-liners */}
+            {recent.length > 0 && (
               <>
-                {templates.length === 0 ? (
-                  <p className="mb-4 text-sm text-ink-faint">No templates yet. Create one below.</p>
-                ) : (
-                  <ul className="mb-3 flex flex-col gap-2">
-                    {templates.map((t) => {
-                      const ids = [...new Set(t.sets.map((s) => s.exercise_id))];
-                      return (
-                        <li key={t.id} className="rounded-xl border border-line bg-night p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium text-ink">{t.name}</span>
-                            <div className="flex shrink-0 gap-1.5">
-                              <button
-                                onClick={() => setEditingTpl(t)}
-                                className="rounded-lg border border-line px-3 py-1.5 text-sm text-ink-soft hover:text-ink"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => doStart(() => startFromTemplate(t))}
-                                className="rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-ember-soft"
-                              >
-                                Start
-                              </button>
-                              <button
-                                onClick={() => removeTpl(t.id, t.name)}
-                                disabled={busyTpl === t.id}
-                                aria-label={`Delete template ${t.name}`}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-2 hover:text-danger-soft disabled:opacity-40"
-                                title="Delete template"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                          {ids.length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {ids.map((id) => {
-                                const ex = exerciseById(id);
-                                const count = t.sets.filter((s) => s.exercise_id === id).length;
-                                return (
-                                  <div key={id} className="flex items-center gap-1 text-xs text-ink-soft">
-                                    <span style={{ color: MUSCLE_COLORS[ex?.muscle_group ?? "core"] }}>
-                                      <ExerciseIcon
-                                        name={ex?.name}
-                                        pattern={ex?.movement_pattern ?? "other"}
-                                        size={22}
-                                      />
-                                    </span>
-                                    <span>
-                                      {ex?.name ?? "?"}{" "}
-                                      <span className="text-ink-faint">×{count}</span>
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                <button
-                  onClick={() => setBuilding(true)}
-                  className="w-full rounded-xl border border-dashed border-line py-3 text-sm text-ink-soft hover:text-ink"
-                >
-                  + New template
-                </button>
+                <div className="rp-eyebrow mb-1">RECENT</div>
+                <div className="flex flex-col">
+                  {recent.map((w, i) => (
+                    <button
+                      key={w.id}
+                      onClick={() => doStart(() => startFromWorkout(w))}
+                      className={[
+                        "flex items-center gap-2.5 px-1 py-[11px] text-left",
+                        i > 0 ? "border-t border-line-2" : "",
+                      ].join(" ")}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-[14.5px] font-semibold text-ink">{w.name}</span>
+                      <span className="shrink-0 font-mono text-[10.5px] text-ink-faint">{recentMeta(w)}</span>
+                      <span className="shrink-0 text-ink-faint">
+                        <Icon name="chevron" size={15} color="currentColor" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </>
             )}
           </div>
         </div>
       </div>
+
+      {/* long-press template management */}
+      {managingTpl && (
+        <div className="fixed inset-0 z-40 flex items-end" onClick={() => setManagingTpl(null)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="sheet-up relative mx-auto w-full max-w-3xl rounded-t-[28px] bg-bg px-5 pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-2.5"
+            style={{ boxShadow: "0 -12px 40px rgba(43,39,37,0.25)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-3 h-1 w-[38px] rounded-full bg-line" />
+            <div className="rp-eyebrow mb-1 px-1">{managingTpl.name}</div>
+            <button
+              onClick={() => {
+                setEditingTpl(managingTpl);
+                setManagingTpl(null);
+              }}
+              className="flex w-full items-center gap-3 px-1 py-3 text-left text-[15px] font-semibold text-ink"
+            >
+              <span className="text-ink-soft"><Icon name="edit" size={17} color="currentColor" /></span>
+              Edit template
+            </button>
+            <button
+              onClick={() => {
+                const t = managingTpl;
+                setManagingTpl(null);
+                removeTpl(t);
+              }}
+              className="flex w-full items-center gap-3 border-t border-line-2 px-1 py-3 text-left text-[15px] font-semibold text-danger-soft"
+            >
+              <Icon name="trash" size={17} color="currentColor" />
+              Delete template
+            </button>
+          </div>
+        </div>
+      )}
 
       {building && <TemplateBuilder onClose={() => setBuilding(false)} />}
 

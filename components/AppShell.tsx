@@ -126,13 +126,11 @@ export function AppShell({ userEmail }: { userEmail: string }) {
         )}
       </div>
 
-      <RestTimer
-        bottomOffset={
-          showLogger
-            ? "calc(env(safe-area-inset-bottom) + 4.75rem)"
-            : "calc(env(safe-area-inset-bottom) + 6.5rem)"
-        }
-      />
+      {/* While the logger is open its footer RestDock owns the countdown —
+          mounting both would double the beep. */}
+      {!(showLogger && draft) && (
+        <RestTimer bottomOffset="calc(env(safe-area-inset-bottom) + 6.5rem)" />
+      )}
       <Toaster />
       <DialogHost />
       <UpdateBanner />
