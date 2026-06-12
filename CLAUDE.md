@@ -66,14 +66,20 @@ Overlays are sibling `fixed` elements with a strict **z-index ladder** (keep dis
 `WorkoutLogger` (full-screen `z-50`) edits `store.draft`. Shapes:
 
 ```ts
-DraftSetEntry  { weight; reps; done; isWarmup; rpe: number | null }
-DraftExercise  { exerciseId; unit; notes: string; sets: DraftSetEntry[] }
-Draft          { name; startedAt; exercises; workoutId? }  // workoutId set only when editing a saved workout
+DraftSetEntry  { weight; reps; seconds; done; setType: "normal"|"warmup"|"drop"; rpe: number | null }
+DraftExercise  { exerciseId; unit; notes: string; restSeconds: number | null; linkedWithPrev: boolean; sets: DraftSetEntry[] }
+Draft          { name; startedAt; exercises; notes: string; readiness: Readiness; workoutId? }  // workoutId set only when editing a saved workout
 ```
 
 - **RPE** (0–10, `SetRow.tsx` dropdown) persists to `workout_sets.rpe`.
+- **Set type** (`SetRow` chip cycles working → warm-up → drop) persists to `workout_sets.set_type`; `is_warmup` is **dual-written** (`= set_type === 'warmup'`) for back-compat and must never be dropped. Read via `setTypeOf()` (`lib/types.ts`). Completing a set starts the rest timer only for `normal` sets, using the exercise's `restSeconds` (set in templates) else the profile default.
+- **Exercise types** — `exercises.exercise_type` is `weight_reps` (default) or `duration` (planks etc.). Duration exercises log `seconds` (→ `workout_sets.duration_seconds`) instead of reps; the Progress chart shows "Best time" for them. `equipment === 'bodyweight'` exercises treat `weight` as *added* weight (`+0` placeholder).
+- **Supersets** — `DraftExercise.linkedWithPrev` links adjacent cards; on save, linked runs share a `workout_sets.superset_group` int (singleton groups stored as null). Reconstructed on edit/repeat by comparing adjacent groups.
 - **Per-exercise notes** persist by **denormalising** the note onto every saved set of that exercise (`workout_sets.notes`); on edit/repeat the note is read back from the first set of the group. There is no `workout_exercises` table — sets grouped by `exercise_id` *are* the exercise.
-- `finishWorkout()` flattens only `done` sets → `workout_sets`. New (non-edit) drafts are persisted to `localStorage["ironlog-draft"]`; edit drafts (`workoutId` present) are never persisted.
+- **Pinned exercise notes** (persist across workouts, work for built-ins) live in the `exercise_notes` table (PK `user_id, exercise_id`), cached in `store.exerciseNotes`, edited via the pin icon + `promptDialog`.
+- **Workout comment** (`Draft.notes` textarea at the bottom of the logger) → `workouts.notes`; shown italic in History.
+- **Readiness check-in** (`Draft.readiness` — sleep/energy/soreness 1–5, card at the top of the logger) → `workouts.readiness_*` columns.
+- `finishWorkout()` flattens only `done` sets → `workout_sets`. New (non-edit) drafts are persisted to `localStorage["ironlog-draft"]`; edit drafts (`workoutId` present) are never persisted. `normalizeDraft()` backfills fields on drafts saved before they existed — extend it when adding draft fields.
 
 ### Theming (light + dark)
 
@@ -107,7 +113,9 @@ Shared visual primitives live in `components/ShojinUI.tsx` (`Icon`, `Eyebrow`, `
 
 ### Database (Supabase)
 
-Schema in `supabase/schema.sql`. Built-in exercises have `user_id = null` (RLS lets all authenticated users read them); every other table is owner-only (`user_id = auth.uid()`). A trigger auto-creates a `profiles` row on signup. `workout_sets` and `template_sets` cascade-delete with their parent. To add a field: `lib/types.ts` → column in `supabase/schema.sql` → `lib/db.ts` query → store (if needed) → components.
+Schema in `supabase/schema.sql` (applied migrations also kept under `supabase/migrations/`). Built-in exercises have `user_id = null` (RLS lets all authenticated users read them); every other table is owner-only (`user_id = auth.uid()`). A trigger auto-creates a `profiles` row on signup. `workout_sets` and `template_sets` cascade-delete with their parent. To add a field: `lib/types.ts` → column in `supabase/schema.sql` → `lib/db.ts` query → store (if needed) → components.
+
+Analytics notes: `exercises.secondary_muscles` (enum array) feeds the muscle-split/radar at **half weight** (`SECONDARY_MUSCLE_WEIGHT` in `lib/muscles.ts` — pass `exerciseById` to `volumeByMuscle`/`volumeByMuscleForRange`). `bodyweight_entries.body_fat_pct` is optional per entry; the Progress "×BW" metric divides blended e1RM (kg) by the latest bodyweight entry on/before the workout day (unit-converted via `toKg`).
 
 ### Data safety — never delete user data
 

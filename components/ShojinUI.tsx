@@ -23,7 +23,9 @@ type IconName =
   | "arrowUp"
   | "sun"
   | "moon"
-  | "trash";
+  | "trash"
+  | "link"
+  | "pin";
 
 export function Icon({
   name,
@@ -130,6 +132,13 @@ export function Icon({
     ),
     moon: <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" {...p} />,
     trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" {...p} />,
+    link: (
+      <>
+        <path d="M10 14a4.5 4.5 0 0 0 6.4.4l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.7 1.7" {...p} />
+        <path d="M14 10a4.5 4.5 0 0 0-6.4-.4l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.7-1.7" {...p} />
+      </>
+    ),
+    pin: <path d="M9 4h6l-1 6 3.5 3.5H6.5L10 10zM12 13.5V20" {...p} />,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" style={style} aria-hidden="true">

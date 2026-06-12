@@ -14,7 +14,7 @@ import { useStore } from "@/lib/store";
 import { blendedOneRepMax, estimateOneRepMax, round1 } from "@/lib/oneRepMax";
 import { localDay } from "@/lib/stats";
 import { volumeByMuscle, MUSCLE_LABELS } from "@/lib/muscles";
-import type { MuscleGroup } from "@/lib/types";
+import { toKg, type BodyweightEntry, type MuscleGroup } from "@/lib/types";
 import { Eyebrow, Delta, Pill } from "./ShojinUI";
 
 // Exact lifts only — no variants (e.g. not "Iso-Lateral … Bench Press").
@@ -24,17 +24,31 @@ const PR_LIFTS: { label: string; names: string[] }[] = [
   { label: "Deadlift", names: ["Deadlift", "Sumo Deadlift"] },
 ];
 
-type Metric = "e1rm" | "top" | "volume";
+type Metric = "e1rm" | "top" | "volume" | "relative" | "time";
 
-const METRICS: { id: Metric; label: string }[] = [
+const WEIGHT_METRICS: { id: Metric; label: string }[] = [
   { id: "e1rm", label: "Est. 1RM" },
   { id: "top", label: "Top set" },
   { id: "volume", label: "Volume" },
 ];
 
+const RELATIVE_METRIC = { id: "relative" as Metric, label: "×BW" };
+const TIME_METRIC = { id: "time" as Metric, label: "Best time" };
+
+/** Latest bodyweight (kg) logged on or before the given local day. */
+function bodyweightKgOn(entries: BodyweightEntry[], day: string): number | null {
+  let best: BodyweightEntry | null = null;
+  for (const e of entries) {
+    if (e.logged_on <= day) best = e;
+    else break; // entries are sorted ascending by logged_on
+  }
+  return best ? toKg(best.weight, best.unit) : null;
+}
+
 export function Progress() {
   const workouts = useStore((s) => s.workouts);
   const exercises = useStore((s) => s.exercises);
+  const bodyweight = useStore((s) => s.bodyweight);
   const unit = useStore((s) => s.profile?.unit ?? "kg");
 
   const logged = useMemo(() => {
@@ -49,7 +63,22 @@ export function Progress() {
   const [metric, setMetric] = useState<Metric>("e1rm");
 
   const selected = exerciseId || logged[0]?.id || "";
-  const selectedName = logged.find((e) => e.id === selected)?.name ?? "";
+  const selectedMeta = logged.find((e) => e.id === selected);
+  const selectedName = selectedMeta?.name ?? "";
+  const isDuration = selectedMeta?.exercise_type === "duration";
+  const hasBodyweight = bodyweight.length > 0;
+
+  const metricChoices = isDuration
+    ? [TIME_METRIC]
+    : hasBodyweight
+      ? [...WEIGHT_METRICS, RELATIVE_METRIC]
+      : WEIGHT_METRICS;
+  // The stored choice can become invalid when the exercise type changes.
+  const activeMetric: Metric = isDuration
+    ? "time"
+    : metric === "time" || (metric === "relative" && !hasBodyweight)
+      ? "e1rm"
+      : metric;
 
   const data = useMemo(() => {
     if (!selected) return [];
@@ -61,23 +90,36 @@ export function Progress() {
     for (const w of asc) {
       const sets = w.sets.filter((s) => s.exercise_id === selected && !s.is_warmup);
       if (!sets.length) continue;
+      const day = localDay(new Date(w.performed_at));
       let value = 0;
-      if (metric === "e1rm") {
+      if (activeMetric === "time") {
+        value = Math.max(...sets.map((s) => s.duration_seconds ?? 0));
+        if (value <= 0) continue;
+      } else if (activeMetric === "relative") {
+        const bwKg = bodyweightKgOn(bodyweight, day);
+        if (!bwKg) continue;
+        const bestKg = Math.max(...sets.map((s) => blendedOneRepMax(toKg(s.weight, s.unit), s.reps)));
+        if (bestKg <= 0) continue;
+        value = Math.round((bestKg / bwKg) * 100) / 100;
+      } else if (activeMetric === "e1rm") {
         value = Math.max(...sets.map((s) => blendedOneRepMax(s.weight, s.reps)));
-      } else if (metric === "top") {
+      } else if (activeMetric === "top") {
         value = Math.max(...sets.map((s) => s.weight));
       } else {
         value = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
       }
-      points.push({ date: localDay(new Date(w.performed_at)), value: round1(value) });
+      points.push({
+        date: day,
+        value: activeMetric === "relative" ? value : round1(value),
+      });
     }
     return points;
-  }, [workouts, selected, metric]);
+  }, [workouts, selected, activeMetric, bodyweight]);
 
   const exerciseById = useStore((s) => s.exerciseById);
 
   const muscleSplit = useMemo(() => {
-    const totals = volumeByMuscle(workouts, (id) => exerciseById(id)?.muscle_group);
+    const totals = volumeByMuscle(workouts, exerciseById);
     const entries = (Object.keys(totals) as MuscleGroup[])
       .map((mg) => ({ mg, vol: totals[mg] }))
       .filter((e) => e.vol > 0)
@@ -121,11 +163,25 @@ export function Progress() {
     );
   }
 
-  const unitLabel = metric === "volume" ? `${unit}·reps` : unit;
+  const unitLabel =
+    activeMetric === "volume"
+      ? `${unit}·reps`
+      : activeMetric === "relative"
+        ? "×BW"
+        : activeMetric === "time"
+          ? "s"
+          : unit;
   const latest = data.length ? data[data.length - 1].value : 0;
   const first = data.length ? data[0].value : 0;
-  const diff = round1(latest - first);
-  const metricLabel = METRICS.find((m) => m.id === metric)?.label ?? "";
+  const diff = Math.round((latest - first) * 100) / 100;
+  const metricLabel =
+    [...WEIGHT_METRICS, RELATIVE_METRIC, TIME_METRIC].find((m) => m.id === activeMetric)?.label ?? "";
+  const deltaSuffix =
+    activeMetric === "volume" || activeMetric === "relative"
+      ? ""
+      : activeMetric === "time"
+        ? "s"
+        : unit;
 
   return (
     <div className="flex flex-col gap-4">
@@ -149,8 +205,8 @@ export function Progress() {
 
       {/* metric chips */}
       <div className="flex gap-2">
-        {METRICS.map((m) => {
-          const on = metric === m.id;
+        {metricChoices.map((m) => {
+          const on = activeMetric === m.id;
           return (
             <button
               key={m.id}
@@ -174,7 +230,7 @@ export function Progress() {
           <span className="font-mono text-[15px] text-ink-faint">{unitLabel}</span>
           {data.length > 1 && diff !== 0 && (
             <span className="ml-auto">
-              <Delta value={`${Math.abs(diff)}${metric === "volume" ? "" : unit}`} up={diff >= 0} />
+              <Delta value={`${Math.abs(diff)}${deltaSuffix}`} up={diff >= 0} />
             </span>
           )}
         </div>

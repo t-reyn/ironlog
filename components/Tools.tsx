@@ -26,6 +26,7 @@ import { useThemePref, setThemePref, type ThemePref } from "@/lib/theme";
 import {
   ALL_MOVEMENT_PATTERNS,
   ALL_MUSCLE_GROUPS,
+  type ExerciseType,
   type MuscleGroup,
   type MovementPattern,
   type Unit,
@@ -59,6 +60,8 @@ export function Tools({ userEmail }: { userEmail: string }) {
   const [customMuscle, setCustomMuscle] = useState<MuscleGroup>("chest");
   const [customPattern, setCustomPattern] = useState<MovementPattern>("other");
   const [customEquipment, setCustomEquipment] = useState("barbell");
+  const [customType, setCustomType] = useState<ExerciseType>("weight_reps");
+  const [customSecondary, setCustomSecondary] = useState<MuscleGroup[]>([]);
   const [savingCustom, setSavingCustom] = useState(false);
   const [deletingCustom, setDeletingCustom] = useState<string | null>(null);
 
@@ -96,9 +99,13 @@ export function Tools({ userEmail }: { userEmail: string }) {
         muscle_group: customMuscle,
         movement_pattern: customPattern,
         equipment: customEquipment,
+        exercise_type: customType,
+        secondary_muscles: customSecondary.filter((m) => m !== customMuscle),
       });
       await refreshExercises();
       setCustomName("");
+      setCustomSecondary([]);
+      setCustomType("weight_reps");
       setShowCustomForm(false);
     } finally {
       setSavingCustom(false);
@@ -481,6 +488,53 @@ export function Tools({ userEmail }: { userEmail: string }) {
                 <option key={p} value={p}>{p.replace(/_/g, " ")}</option>
               ))}
             </select>
+            <div className="flex items-center justify-between py-1">
+              <span className="text-xs text-ink-faint">Tracks</span>
+              <div className="flex gap-1 rounded-lg border border-line p-1">
+                {([
+                  { id: "weight_reps", label: "Weight × reps" },
+                  { id: "duration", label: "Time" },
+                ] as { id: ExerciseType; label: string }[]).map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setCustomType(t.id)}
+                    className={[
+                      "rounded-md px-2.5 py-1 text-xs",
+                      customType === t.id ? "bg-ember text-on-accent" : "text-ink-soft hover:text-ink",
+                    ].join(" ")}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <span className="text-xs text-ink-faint">Secondary muscles (count at half weight)</span>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {ALL_MUSCLE_GROUPS.filter((g) => g !== customMuscle).map((g) => {
+                  const on = customSecondary.includes(g);
+                  return (
+                    <button
+                      key={g}
+                      onClick={() =>
+                        setCustomSecondary((prev) =>
+                          on ? prev.filter((m) => m !== g) : [...prev, g],
+                        )
+                      }
+                      aria-pressed={on}
+                      className={[
+                        "rounded-full px-2.5 py-1 text-xs capitalize transition-colors",
+                        on
+                          ? "bg-ink text-bg"
+                          : "border border-line text-ink-soft hover:text-ink",
+                      ].join(" ")}
+                    >
+                      {g}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={saveCustomExercise}

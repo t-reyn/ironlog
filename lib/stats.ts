@@ -1,4 +1,5 @@
 import type { MuscleGroup, WorkoutWithSets } from "./types";
+import { addWeightedVolume, type MuscleLookup } from "./muscles";
 
 /** Local YYYY-MM-DD for a Date (heatmap/streaks work in the user's timezone). */
 export function localDay(d: Date): string {
@@ -116,10 +117,11 @@ export function buildHeatmap(
 }
 
 /** Working-set volume by muscle group for workouts whose local day falls in
- *  [from, to] (inclusive). Omit `to` for "from .. today". Dates are YYYY-MM-DD. */
+ *  [from, to] (inclusive). Omit `to` for "from .. today". Dates are YYYY-MM-DD.
+ *  Secondary muscle groups accrue at SECONDARY_MUSCLE_WEIGHT. */
 export function volumeByMuscleForRange(
   workouts: WorkoutWithSets[],
-  muscleOf: (exerciseId: string) => MuscleGroup | undefined,
+  exerciseOf: MuscleLookup,
   from: string,
   to?: string,
 ): Record<MuscleGroup, number> {
@@ -137,9 +139,9 @@ export function volumeByMuscleForRange(
     if (to && day > to) continue;
     for (const s of w.sets) {
       if (s.is_warmup) continue;
-      const mg = muscleOf(s.exercise_id);
-      if (!mg) continue;
-      totals[mg] += s.weight * s.reps;
+      const ex = exerciseOf(s.exercise_id);
+      if (!ex) continue;
+      addWeightedVolume(totals, ex, s.weight * s.reps);
     }
   }
   return totals;

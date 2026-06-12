@@ -36,8 +36,13 @@ create table if not exists exercises (
   movement_pattern movement_pattern not null default 'other',
   equipment text not null default 'barbell',
   is_custom boolean not null default false,
+  exercise_type text not null default 'weight_reps' check (exercise_type in ('weight_reps','duration')),
+  secondary_muscles muscle_group[] not null default '{}',
   created_at timestamptz not null default now()
 );
+-- Additive migrations for existing DBs (idempotent):
+alter table exercises add column if not exists exercise_type text not null default 'weight_reps' check (exercise_type in ('weight_reps','duration'));
+alter table exercises add column if not exists secondary_muscles muscle_group[] not null default '{}';
 -- Built-in seeds are unique by name; user customs are unique per (user, name).
 create unique index if not exists exercises_builtin_name
   on exercises (name) where user_id is null;
@@ -54,9 +59,16 @@ create table if not exists workouts (
   performed_at timestamptz not null default now(),
   duration_seconds int,
   notes text,
+  readiness_sleep smallint check (readiness_sleep between 1 and 5),
+  readiness_energy smallint check (readiness_energy between 1 and 5),
+  readiness_soreness smallint check (readiness_soreness between 1 and 5),
   created_at timestamptz not null default now()
 );
 create index if not exists workouts_user_perf on workouts (user_id, performed_at desc);
+-- Pre-session readiness check-in (1-5 each); additive for existing DBs:
+alter table workouts add column if not exists readiness_sleep smallint check (readiness_sleep between 1 and 5);
+alter table workouts add column if not exists readiness_energy smallint check (readiness_energy between 1 and 5);
+alter table workouts add column if not exists readiness_soreness smallint check (readiness_soreness between 1 and 5);
 
 create table if not exists workout_sets (
   id uuid primary key default gen_random_uuid(),
@@ -69,14 +81,24 @@ create table if not exists workout_sets (
   rpe numeric(3,1),
   is_warmup boolean not null default false,
   completed boolean not null default true,
-  notes text
+  notes text,
+  unit text not null default 'kg' check (unit in ('kg','lb')),
+  set_type text not null default 'normal' check (set_type in ('normal','warmup','drop')),
+  duration_seconds int,
+  superset_group int
 );
 create index if not exists workout_sets_workout on workout_sets (workout_id);
 create index if not exists workout_sets_user_ex on workout_sets (user_id, exercise_id);
--- Added for per-exercise unit support; run separately on existing DBs:
--- alter table workout_sets add column if not exists unit text not null default 'kg' check (unit in ('kg','lb'));
--- Added for per-exercise notes (stored on each set of the exercise); run on existing DBs:
--- alter table workout_sets add column if not exists notes text;
+-- Additive migrations for existing DBs (idempotent):
+alter table workout_sets add column if not exists unit text not null default 'kg' check (unit in ('kg','lb'));
+alter table workout_sets add column if not exists notes text;
+-- set_type supersedes is_warmup (kept + dual-written for back-compat; never drop)
+alter table workout_sets add column if not exists set_type text not null default 'normal' check (set_type in ('normal','warmup','drop'));
+update workout_sets set set_type = 'warmup' where is_warmup and set_type = 'normal';
+-- duration-type exercises (e.g. planks) log time instead of reps
+alter table workout_sets add column if not exists duration_seconds int;
+-- sets sharing a non-null superset_group within a workout were performed as a superset
+alter table workout_sets add column if not exists superset_group int;
 
 -- ---------------------------------------------------------------------------
 -- templates + template_sets (planned targets)
@@ -95,9 +117,12 @@ create table if not exists template_sets (
   exercise_id uuid not null references exercises (id),
   set_index int not null default 0,
   weight numeric(7,2) not null default 0,
-  reps int not null default 0
+  reps int not null default 0,
+  rest_seconds int
 );
 create index if not exists template_sets_template on template_sets (template_id);
+-- Per-exercise rest override (denormalised onto each set, like workout_sets.notes):
+alter table template_sets add column if not exists rest_seconds int;
 
 -- ---------------------------------------------------------------------------
 -- bodyweight_entries
@@ -107,10 +132,25 @@ create table if not exists bodyweight_entries (
   user_id uuid not null default auth.uid () references auth.users (id) on delete cascade,
   logged_on date not null default current_date,
   weight numeric(6,2) not null,
-  unit text not null default 'kg' check (unit in ('kg','lb'))
+  unit text not null default 'kg' check (unit in ('kg','lb')),
+  body_fat_pct numeric(4,1) check (body_fat_pct > 0 and body_fat_pct < 100)
 );
 create unique index if not exists bodyweight_user_day
   on bodyweight_entries (user_id, logged_on);
+alter table bodyweight_entries add column if not exists body_fat_pct numeric(4,1) check (body_fat_pct > 0 and body_fat_pct < 100);
+
+-- ---------------------------------------------------------------------------
+-- exercise_notes — persistent per-user pinned note on an exercise (setup cues
+-- like "seat height 4"). Separate table because built-in exercises
+-- (user_id null) aren't writable by users under RLS.
+-- ---------------------------------------------------------------------------
+create table if not exists exercise_notes (
+  user_id uuid not null default auth.uid () references auth.users (id) on delete cascade,
+  exercise_id uuid not null references exercises (id) on delete cascade,
+  note text not null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, exercise_id)
+);
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security
@@ -122,6 +162,7 @@ alter table workout_sets        enable row level security;
 alter table templates           enable row level security;
 alter table template_sets       enable row level security;
 alter table bodyweight_entries  enable row level security;
+alter table exercise_notes      enable row level security;
 
 -- Helper to (re)create a policy idempotently
 do $$
@@ -147,7 +188,7 @@ begin
     using (user_id = auth.uid ());
 
   -- the owner-only tables share the same shape
-  foreach t in array array['workouts','workout_sets','templates','template_sets','bodyweight_entries']
+  foreach t in array array['workouts','workout_sets','templates','template_sets','bodyweight_entries','exercise_notes']
   loop
     execute format('drop policy if exists %I_rw on %I', t, t);
     execute format(
@@ -233,6 +274,7 @@ insert into exercises (name, muscle_group, movement_pattern, equipment) values
   ('Incline Cable Fly',                 'chest',     'horizontal_press',   'cable'),
   ('Dips (Chest)',                      'chest',     'horizontal_press',   'bodyweight'),
   ('Incline Chest Press (Machine)',     'chest',     'horizontal_press',   'machine'),
+  ('Iso-Lateral Machine Horizontal Bench Press', 'chest', 'horizontal_press', 'machine'),
   -- Back
   ('Chin Up',                           'back',      'vertical_pull',      'bodyweight'),
   ('Neutral Grip Pull Up',              'back',      'vertical_pull',      'bodyweight'),
@@ -297,6 +339,72 @@ on conflict (name) where user_id is null do update
   set muscle_group = excluded.muscle_group,
       movement_pattern = excluded.movement_pattern,
       equipment = excluded.equipment;
+
+-- ---------------------------------------------------------------------------
+-- Built-in exercise metadata: tracking type + secondary muscles.
+-- Secondary muscles count toward the muscle-split analytics at half weight.
+-- ---------------------------------------------------------------------------
+update exercises set exercise_type = 'duration'
+  where user_id is null and name in ('Plank','Side Plank');
+
+-- Compound presses (chest primary): front delts + triceps assist
+update exercises set secondary_muscles = '{shoulders,arms}'::muscle_group[]
+  where user_id is null and name in (
+    'Bench Press (Barbell)','Incline Bench Press','Decline Bench Press',
+    'Dumbbell Bench Press','Incline Dumbbell Press','Dumbbell Bench Press (Single Arm)',
+    'Machine Chest Press','Incline Chest Press (Machine)',
+    'Iso-Lateral Machine Horizontal Bench Press','Dips (Chest)');
+update exercises set secondary_muscles = '{shoulders,arms,core}'::muscle_group[]
+  where user_id is null and name = 'Push Up';
+-- Flys (chest primary): front delts assist
+update exercises set secondary_muscles = '{shoulders}'::muscle_group[]
+  where user_id is null and name in (
+    'Cable Fly','Cable Fly (Single Arm)','Cable Crossover','Incline Cable Fly',
+    'Dumbbell Fly','Machine Fly','Pec Deck');
+-- Vertical pulls (back primary): biceps assist
+update exercises set secondary_muscles = '{arms}'::muscle_group[]
+  where user_id is null and name in (
+    'Pull Up','Chin Up','Neutral Grip Pull Up','Lat Pulldown (Cable)',
+    'Lat Pulldown (Single Arm)','Assisted Pull Up (Machine)');
+-- Rows (back primary): biceps + rear delts assist
+update exercises set secondary_muscles = '{arms,shoulders}'::muscle_group[]
+  where user_id is null and name in (
+    'Barbell Row','Seated Cable Row','Dumbbell Row','T-Bar Row','Pendlay Row',
+    'Cable Row (Single Arm)','Chest Supported Row (Machine)','Low Row (Machine)',
+    'High Row (Machine)','Machine Row');
+-- Deadlifts: posterior chain crosses back/legs/core
+update exercises set secondary_muscles = '{legs,core}'::muscle_group[]
+  where user_id is null and name = 'Deadlift';
+update exercises set secondary_muscles = '{back,core}'::muscle_group[]
+  where user_id is null and name in (
+    'Sumo Deadlift','Romanian Deadlift','Romanian Deadlift (Single-Leg)','Good Morning');
+update exercises set secondary_muscles = '{legs}'::muscle_group[]
+  where user_id is null and name in ('Back Extension','Back Extension (Single-Leg)');
+-- Overhead presses (shoulders primary): triceps + upper chest assist
+update exercises set secondary_muscles = '{arms,chest}'::muscle_group[]
+  where user_id is null and name in (
+    'Overhead Press (Barbell)','Overhead Press (Single Arm)','Dumbbell Shoulder Press',
+    'Machine Shoulder Press','Arnold Press');
+update exercises set secondary_muscles = '{back}'::muscle_group[]
+  where user_id is null and name in ('Face Pull','Rear Delt Fly');
+update exercises set secondary_muscles = '{shoulders}'::muscle_group[]
+  where user_id is null and name = 'Rear Delt Fly (Machine)';
+update exercises set secondary_muscles = '{back,arms}'::muscle_group[]
+  where user_id is null and name = 'Upright Row';
+-- Triceps compounds (arms primary): chest + front delts assist
+update exercises set secondary_muscles = '{chest,shoulders}'::muscle_group[]
+  where user_id is null and name in ('Close Grip Bench Press','Dips (Triceps)');
+-- Squats and lunges (legs primary): trunk bracing
+update exercises set secondary_muscles = '{core}'::muscle_group[]
+  where user_id is null and name in (
+    'Back Squat','Front Squat','Pause Squat (Barbell)','Box Squat','Goblet Squat',
+    'Smith Machine Squat','Pistol Squat','Walking Lunge','Reverse Lunge','Step Up',
+    'Bulgarian Split Squat','Bulgarian Split Squat (Barbell)');
+-- Core moves with heavy shoulder/lat involvement
+update exercises set secondary_muscles = '{shoulders}'::muscle_group[]
+  where user_id is null and name in ('Plank','Side Plank');
+update exercises set secondary_muscles = '{shoulders,back}'::muscle_group[]
+  where user_id is null and name = 'Ab Wheel Rollout';
 
 -- ---------------------------------------------------------------------------
 -- feedback — user suggestions (exercises, features). Dev reads via service role.

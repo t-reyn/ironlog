@@ -6,21 +6,102 @@ import { saveTemplate } from "@/lib/db";
 import { MUSCLE_COLORS } from "@/lib/muscles";
 import { confirmDialog, promptDialog } from "@/lib/dialog";
 import { toast } from "@/lib/toast";
+import type { Readiness } from "@/lib/types";
 import { ExerciseIcon } from "./ExerciseIcon";
 import { ExercisePicker } from "./ExercisePicker";
 import { SetRow } from "./SetRow";
 import { Icon } from "./ShojinUI";
 
+const READINESS_ROWS: { key: keyof Readiness; label: string; hint: string }[] = [
+  { key: "sleep", label: "Sleep", hint: "poor → great" },
+  { key: "energy", label: "Energy", hint: "drained → fresh" },
+  { key: "soreness", label: "Soreness", hint: "none → very sore" },
+];
+
+function ReadinessCard({
+  readiness,
+  isEdit,
+  onChange,
+}: {
+  readiness: Readiness;
+  isEdit: boolean;
+  onChange: (patch: Partial<Readiness>) => void;
+}) {
+  const answered = READINESS_ROWS.filter((r) => readiness[r.key] !== null);
+  const [open, setOpen] = useState(() => !isEdit && answered.length === 0);
+
+  return (
+    <div className="rounded-[24px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2"
+        aria-expanded={open}
+      >
+        <span className="rp-eyebrow">Readiness check-in</span>
+        {!open && answered.length > 0 && (
+          <span className="font-mono text-xs text-ink-soft">
+            {READINESS_ROWS.map((r) => readiness[r.key] ?? "–").join(" · ")}
+          </span>
+        )}
+        <span
+          className="ml-auto text-ink-faint transition-transform duration-150"
+          style={{ display: "inline-block", transform: open ? "rotate(-90deg)" : "rotate(90deg)" }}
+        >
+          <Icon name="chevron" size={15} color="currentColor" />
+        </span>
+      </button>
+
+      {open && (
+        <div className="mt-3 flex flex-col gap-2.5">
+          {READINESS_ROWS.map(({ key, label, hint }) => (
+            <div key={key} className="flex items-center gap-2">
+              <span className="w-[72px] shrink-0 text-[13px] font-semibold text-ink-soft" title={hint}>
+                {label}
+              </span>
+              <div className="flex flex-1 gap-1.5">
+                {[1, 2, 3, 4, 5].map((v) => {
+                  const on = readiness[key] === v;
+                  return (
+                    <button
+                      key={v}
+                      onClick={() => onChange({ [key]: on ? null : v })}
+                      aria-pressed={on}
+                      aria-label={`${label} ${v} of 5`}
+                      className={[
+                        "h-9 flex-1 rounded-lg text-sm font-semibold transition-colors",
+                        on
+                          ? "bg-ink text-bg"
+                          : "border border-line bg-surface-2 text-ink-faint hover:text-ink-soft",
+                      ].join(" ")}
+                    >
+                      {v}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const draft = useStore((s) => s.draft);
   const setName = useStore((s) => s.setDraftName);
+  const setNotes = useStore((s) => s.setDraftNotes);
+  const setReadiness = useStore((s) => s.setDraftReadiness);
   const addExercise = useStore((s) => s.addDraftExercise);
   const replaceExercise = useStore((s) => s.replaceDraftExercise);
   const removeExercise = useStore((s) => s.removeDraftExercise);
   const insertExercise = useStore((s) => s.insertDraftExercise);
   const addSet = useStore((s) => s.addDraftSet);
   const toggleUnit = useStore((s) => s.toggleDraftExerciseUnit);
+  const toggleLink = useStore((s) => s.toggleDraftExerciseLink);
   const setExerciseNotes = useStore((s) => s.setDraftExerciseNotes);
+  const exerciseNotes = useStore((s) => s.exerciseNotes);
+  const setPinnedNote = useStore((s) => s.setPinnedNote);
   const discard = useStore((s) => s.discardDraft);
   const finish = useStore((s) => s.finishWorkout);
   const exerciseById = useStore((s) => s.exerciseById);
@@ -68,6 +149,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
         set_index: idx,
         weight: s.weight,
         reps: s.reps,
+        rest_seconds: ex.restSeconds,
       })),
     );
     setSaving(true);
@@ -79,6 +161,22 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
       toast.error("Couldn't save template. Try again.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function editPinnedNote(exerciseId: string, exerciseName: string) {
+    const next = await promptDialog({
+      title: "Pinned note",
+      message: `Shows on ${exerciseName} in every workout (setup cues, seat heights…). Clear the text to unpin.`,
+      placeholder: "e.g. Seat height 4, narrow grip",
+      defaultValue: exerciseNotes[exerciseId] ?? "",
+      confirmLabel: "Save",
+    });
+    if (next === null) return;
+    try {
+      await setPinnedNote(exerciseId, next);
+    } catch {
+      toast.error("Couldn't save the pinned note.");
     }
   }
 
@@ -175,78 +273,149 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
 
       {/* Scrollable exercises */}
       <div className="flex-1 overflow-y-auto">
-        <div className={`mx-auto flex max-w-3xl flex-col gap-4 p-4 ${restActive ? "pb-32" : ""}`}>
+        <div className={`mx-auto flex max-w-3xl flex-col p-4 ${restActive ? "pb-32" : ""}`}>
+          <ReadinessCard
+            readiness={draft.readiness}
+            isEdit={!!draft.workoutId}
+            onChange={setReadiness}
+          />
+
           {draft.exercises.map((ex, exIdx) => {
             const meta = exerciseById(ex.exerciseId);
             const exUnit = ex.unit ?? unit;
+            const exType = meta?.exercise_type ?? "weight_reps";
+            const isBodyweight = meta?.equipment === "bodyweight";
+            const pinned = exerciseNotes[ex.exerciseId];
+            const nextLinked = draft.exercises[exIdx + 1]?.linkedWithPrev ?? false;
+            const inSuperset = ex.linkedWithPrev || nextLinked;
             return (
-              <div
-                key={`${ex.exerciseId}-${exIdx}`}
-                className="rounded-[24px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]"
-              >
-                <div className="mb-2 flex items-center gap-3">
-                  <span style={{ color: MUSCLE_COLORS[meta?.muscle_group ?? "core"] }}>
-                    <ExerciseIcon name={meta?.name} pattern={meta?.movement_pattern ?? "other"} size={34} />
-                  </span>
-                  <button
-                    onClick={() => setSwappingIdx(exIdx)}
-                    className="flex-1 text-left text-lg font-bold tracking-[-0.015em] text-ink hover:text-green-ink"
-                    title="Change exercise"
-                  >
-                    {meta?.name ?? "Exercise"}
-                  </button>
-                  <button
-                    onClick={() => toggleUnit(exIdx)}
-                    aria-label={`Toggle units (currently ${exUnit})`}
-                    className="rounded border border-line px-1.5 py-0.5 text-xs text-ink-soft hover:text-ink"
-                    title="Toggle kg / lb"
-                  >
-                    {exUnit}
-                  </button>
-                  <button
-                    onClick={() => removeExerciseWithUndo(exIdx)}
-                    aria-label={`Remove ${meta?.name ?? "exercise"}`}
-                    title="Remove exercise"
-                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-faint hover:border-danger/50 hover:bg-surface-2 hover:text-danger-soft"
-                  >
-                    <Icon name="trash" size={17} color="currentColor" />
-                  </button>
-                </div>
+              <div key={`${ex.exerciseId}-${exIdx}`}>
+                {/* Superset link toggle between adjacent cards */}
+                {exIdx > 0 ? (
+                  <div className="flex justify-center py-1.5">
+                    <button
+                      onClick={() => toggleLink(exIdx)}
+                      aria-pressed={ex.linkedWithPrev}
+                      title="Superset with the exercise above"
+                      className={[
+                        "flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors",
+                        ex.linkedWithPrev
+                          ? "bg-amber/15 text-amber"
+                          : "border border-line text-ink-faint hover:text-ink-soft",
+                      ].join(" ")}
+                    >
+                      <Icon name="link" size={13} color="currentColor" />
+                      {ex.linkedWithPrev ? "Superset" : "Link"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="pt-4" />
+                )}
 
-                <div className="mb-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
-                  <span className="w-6 text-center">#</span>
-                  <span className="w-12 text-center">Type</span>
-                  <span className="flex-1 text-center">Weight ({exUnit})</span>
-                  <span className="flex-1 text-center">Reps</span>
-                  <span className="w-14 text-center">RPE</span>
-                  <span className="w-9 shrink-0" aria-hidden="true" />
-                  <span className="w-7 shrink-0" aria-hidden="true" />
-                </div>
-
-                {ex.sets.map((set, setIdx) => (
-                  <SetRow key={setIdx} exIdx={exIdx} setIdx={setIdx} set={set} unit={exUnit} />
-                ))}
-
-                <button
-                  onClick={() => addSet(exIdx)}
-                  className="mt-2 flex w-full items-center justify-center gap-1.5 border-t border-line-2 pt-3 text-sm font-semibold text-green-ink"
+                <div
+                  className={[
+                    "rounded-[24px] border bg-surface p-4 shadow-[var(--rp-shadow-sm)]",
+                    inSuperset ? "border-amber/50" : "border-line-2",
+                  ].join(" ")}
                 >
-                  <Icon name="plus" size={16} color="currentColor" sw={2.2} />
-                  Add set
-                </button>
+                  <div className="mb-2 flex items-center gap-3">
+                    <span style={{ color: MUSCLE_COLORS[meta?.muscle_group ?? "core"] }}>
+                      <ExerciseIcon name={meta?.name} pattern={meta?.movement_pattern ?? "other"} size={34} />
+                    </span>
+                    <button
+                      onClick={() => setSwappingIdx(exIdx)}
+                      className="flex-1 text-left text-lg font-bold tracking-[-0.015em] text-ink hover:text-green-ink"
+                      title="Change exercise"
+                    >
+                      {meta?.name ?? "Exercise"}
+                    </button>
+                    <button
+                      onClick={() => toggleUnit(exIdx)}
+                      aria-label={`Toggle units (currently ${exUnit})`}
+                      className="rounded border border-line px-1.5 py-0.5 text-xs text-ink-soft hover:text-ink"
+                      title="Toggle kg / lb"
+                    >
+                      {exUnit}
+                    </button>
+                    <button
+                      onClick={() => removeExerciseWithUndo(exIdx)}
+                      aria-label={`Remove ${meta?.name ?? "exercise"}`}
+                      title="Remove exercise"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-faint hover:border-danger/50 hover:bg-surface-2 hover:text-danger-soft"
+                    >
+                      <Icon name="trash" size={17} color="currentColor" />
+                    </button>
+                  </div>
 
-                <div className="mt-2 flex items-start gap-2 border-t border-line-2 pt-3">
-                  <span className="mt-1.5 shrink-0 text-ink-faint">
-                    <Icon name="edit" size={15} color="currentColor" />
-                  </span>
-                  <textarea
-                    value={ex.notes ?? ""}
-                    onChange={(e) => setExerciseNotes(exIdx, e.target.value)}
-                    rows={1}
-                    aria-label={`Notes for ${meta?.name ?? "exercise"}`}
-                    placeholder="Add a note…"
-                    className="min-h-[2rem] w-full resize-y bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
-                  />
+                  {pinned && (
+                    <button
+                      onClick={() => editPinnedNote(ex.exerciseId, meta?.name ?? "this exercise")}
+                      className="mb-2 flex w-full items-start gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-left"
+                      title="Edit pinned note"
+                    >
+                      <span className="mt-0.5 shrink-0 text-amber">
+                        <Icon name="pin" size={13} color="currentColor" />
+                      </span>
+                      <span className="text-[13px] text-ink-soft">{pinned}</span>
+                    </button>
+                  )}
+
+                  <div className="mb-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+                    <span className="w-6 text-center">#</span>
+                    <span className="w-12 text-center">Type</span>
+                    <span className="flex-1 text-center">
+                      {isBodyweight ? `+ Weight (${exUnit})` : `Weight (${exUnit})`}
+                    </span>
+                    <span className="flex-1 text-center">{exType === "duration" ? "Time (s)" : "Reps"}</span>
+                    <span className="w-14 text-center">RPE</span>
+                    <span className="w-9 shrink-0" aria-hidden="true" />
+                    <span className="w-7 shrink-0" aria-hidden="true" />
+                  </div>
+
+                  {ex.sets.map((set, setIdx) => (
+                    <SetRow
+                      key={setIdx}
+                      exIdx={exIdx}
+                      setIdx={setIdx}
+                      set={set}
+                      unit={exUnit}
+                      exerciseType={exType}
+                      isBodyweight={isBodyweight}
+                      restSeconds={ex.restSeconds}
+                    />
+                  ))}
+
+                  <button
+                    onClick={() => addSet(exIdx)}
+                    className="mt-2 flex w-full items-center justify-center gap-1.5 border-t border-line-2 pt-3 text-sm font-semibold text-green-ink"
+                  >
+                    <Icon name="plus" size={16} color="currentColor" sw={2.2} />
+                    Add set
+                  </button>
+
+                  <div className="mt-2 flex items-start gap-2 border-t border-line-2 pt-3">
+                    <span className="mt-1.5 shrink-0 text-ink-faint">
+                      <Icon name="edit" size={15} color="currentColor" />
+                    </span>
+                    <textarea
+                      value={ex.notes ?? ""}
+                      onChange={(e) => setExerciseNotes(exIdx, e.target.value)}
+                      rows={1}
+                      aria-label={`Notes for ${meta?.name ?? "exercise"}`}
+                      placeholder="Add a note…"
+                      className="min-h-[2rem] w-full resize-y bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
+                    />
+                    {!pinned && (
+                      <button
+                        onClick={() => editPinnedNote(ex.exerciseId, meta?.name ?? "this exercise")}
+                        aria-label={`Pin a note for ${meta?.name ?? "exercise"}`}
+                        title="Pin a note that shows every workout"
+                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-faint hover:text-amber"
+                      >
+                        <Icon name="pin" size={15} color="currentColor" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -254,11 +423,24 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
 
           <button
             onClick={() => setPicking(true)}
-            className="flex items-center justify-center gap-1.5 rounded-full border border-line bg-surface py-3 font-semibold text-ink-soft hover:text-ink"
+            className="mt-4 flex items-center justify-center gap-1.5 rounded-full border border-line bg-surface py-3 font-semibold text-ink-soft hover:text-ink"
           >
             <Icon name="plus" size={17} color="currentColor" sw={2.2} />
             Add exercise
           </button>
+
+          {/* Workout comment — saved to workouts.notes */}
+          <div className="mt-4 rounded-[24px] border border-line-2 bg-surface p-4 shadow-[var(--rp-shadow-sm)]">
+            <span className="rp-eyebrow">Workout comment</span>
+            <textarea
+              value={draft.notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              aria-label="Workout comment"
+              placeholder="How did it go? (optional)"
+              className="mt-2 min-h-[2.5rem] w-full resize-y bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
+            />
+          </div>
         </div>
       </div>
 

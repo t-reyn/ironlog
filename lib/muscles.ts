@@ -1,4 +1,24 @@
-import type { MuscleGroup, MovementPattern, WorkoutWithSets } from "./types";
+import type { Exercise, MuscleGroup, MovementPattern, WorkoutWithSets } from "./types";
+
+/** How much a set's volume counts toward each *secondary* muscle group in the
+ *  split analytics (primary counts at 1.0). */
+export const SECONDARY_MUSCLE_WEIGHT = 0.5;
+
+export type MuscleLookup = (
+  exerciseId: string,
+) => Pick<Exercise, "muscle_group" | "secondary_muscles"> | undefined;
+
+export function addWeightedVolume(
+  totals: Record<MuscleGroup, number>,
+  ex: Pick<Exercise, "muscle_group" | "secondary_muscles">,
+  volume: number,
+): void {
+  totals[ex.muscle_group] += volume;
+  for (const mg of ex.secondary_muscles ?? []) {
+    if (mg === ex.muscle_group) continue;
+    totals[mg] += volume * SECONDARY_MUSCLE_WEIGHT;
+  }
+}
 
 export const MUSCLE_LABELS: Record<MuscleGroup, string> = {
   chest: "Chest",
@@ -34,10 +54,10 @@ export const PATTERN_LABELS: Record<MovementPattern, string> = {
 };
 
 /** Volume (weight x reps) summed by muscle group over the given workouts.
- *  Needs a lookup from exercise_id to its muscle group. */
+ *  Secondary muscle groups accrue at SECONDARY_MUSCLE_WEIGHT. */
 export function volumeByMuscle(
   workouts: WorkoutWithSets[],
-  muscleOf: (exerciseId: string) => MuscleGroup | undefined,
+  exerciseOf: MuscleLookup,
 ): Record<MuscleGroup, number> {
   const totals: Record<MuscleGroup, number> = {
     chest: 0,
@@ -49,9 +69,9 @@ export function volumeByMuscle(
   };
   for (const w of workouts) {
     for (const s of w.sets) {
-      const mg = muscleOf(s.exercise_id);
-      if (!mg || s.is_warmup) continue;
-      totals[mg] += s.weight * s.reps;
+      const ex = exerciseOf(s.exercise_id);
+      if (!ex || s.is_warmup) continue;
+      addWeightedVolume(totals, ex, s.weight * s.reps);
     }
   }
   return totals;

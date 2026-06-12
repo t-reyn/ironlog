@@ -157,6 +157,19 @@ export function History({ onStart, onNew }: { onStart: () => void; onNew: () => 
                     </p>
                   )}
 
+                  {(w.readiness_sleep != null ||
+                    w.readiness_energy != null ||
+                    w.readiness_soreness != null) && (
+                    <p className="mt-1.5 font-mono text-[11px] text-ink-faint">
+                      Sleep {w.readiness_sleep ?? "–"} · Energy {w.readiness_energy ?? "–"} ·
+                      Soreness {w.readiness_soreness ?? "–"}
+                    </p>
+                  )}
+
+                  {w.notes && (
+                    <p className="mt-1.5 text-[12.5px] italic text-ink-soft">“{w.notes}”</p>
+                  )}
+
                   <div className="mt-3 flex gap-2 border-t border-line-2 pt-3">
                     <button
                       onClick={() => editWorkout(w)}

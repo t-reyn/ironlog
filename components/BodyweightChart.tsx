@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -13,11 +13,15 @@ import {
 import { useStore } from "@/lib/store";
 import { upsertBodyweight, deleteBodyweight } from "@/lib/db";
 
+type Series = "weight" | "fat";
+
 export function BodyweightChart() {
   const entries = useStore((s) => s.bodyweight);
   const refresh = useStore((s) => s.refreshBodyweight);
   const unit = useStore((s) => s.profile?.unit ?? "kg");
   const [value, setValue] = useState("");
+  const [fatValue, setFatValue] = useState("");
+  const [series, setSeries] = useState<Series>("weight");
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
@@ -31,17 +35,35 @@ export function BodyweightChart() {
     }
   }
 
-  const data = entries.map((e) => ({ date: e.logged_on, weight: e.weight }));
-  const latest = entries[entries.length - 1]?.weight;
+  const hasFat = useMemo(() => entries.some((e) => e.body_fat_pct != null), [entries]);
+  const shown = hasFat ? series : "weight";
+
+  const data = useMemo(() => {
+    if (shown === "fat") {
+      return entries
+        .filter((e) => e.body_fat_pct != null)
+        .map((e) => ({ date: e.logged_on, value: e.body_fat_pct as number }));
+    }
+    return entries.map((e) => ({ date: e.logged_on, value: e.weight }));
+  }, [entries, shown]);
+
+  const latest = entries[entries.length - 1];
 
   async function add() {
     const w = parseFloat(value);
-    if (!w || w <= 0) return;
+    const fat = parseFloat(fatValue);
+    const hasWeight = w > 0;
+    const fatOk = fat > 0 && fat < 100;
+    if (!hasWeight && !fatOk) return;
     setBusy(true);
     try {
-      await upsertBodyweight(w, unit);
+      // Logging fat alone re-uses the latest weight so the upsert stays valid.
+      const weightToLog = hasWeight ? w : latest?.weight;
+      if (!weightToLog) return;
+      await upsertBodyweight(weightToLog, unit, fatOk ? fat : null);
       await refresh();
       setValue("");
+      setFatValue("");
     } finally {
       setBusy(false);
     }
@@ -49,11 +71,14 @@ export function BodyweightChart() {
 
   return (
     <div>
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="text-sm text-ink-soft">
           {latest != null ? (
             <>
-              Latest: <span className="text-ink">{latest} {unit}</span>
+              Latest: <span className="text-ink">{latest.weight} {unit}</span>
+              {latest.body_fat_pct != null && (
+                <span className="text-ink-faint"> · {latest.body_fat_pct}% BF</span>
+              )}
             </>
           ) : (
             "No entries yet"
@@ -66,7 +91,17 @@ export function BodyweightChart() {
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={`Today (${unit})`}
-            className="w-28 rounded-md border border-line bg-night px-2 py-1 text-right outline-none focus:border-ember"
+            aria-label={`Body weight in ${unit}`}
+            className="w-24 rounded-md border border-line bg-night px-2 py-1 text-right outline-none focus:border-ember"
+          />
+          <input
+            type="number"
+            inputMode="decimal"
+            value={fatValue}
+            onChange={(e) => setFatValue(e.target.value)}
+            placeholder="BF %"
+            aria-label="Body fat percentage"
+            className="w-16 rounded-md border border-line bg-night px-2 py-1 text-right outline-none focus:border-ember"
           />
           <button
             onClick={add}
@@ -77,6 +112,28 @@ export function BodyweightChart() {
           </button>
         </div>
       </div>
+
+      {hasFat && (
+        <div className="mb-3 flex gap-1.5">
+          {([
+            { id: "weight", label: `Weight (${unit})` },
+            { id: "fat", label: "Body fat %" },
+          ] as { id: Series; label: string }[]).map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSeries(s.id)}
+              className={[
+                "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                shown === s.id
+                  ? "border border-ink bg-ink text-bg"
+                  : "border border-line bg-surface text-ink-soft",
+              ].join(" ")}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {data.length > 0 ? (
         <div className="h-48 w-full">
@@ -103,7 +160,8 @@ export function BodyweightChart() {
               />
               <Line
                 type="monotone"
-                dataKey="weight"
+                dataKey="value"
+                name={shown === "fat" ? "Body fat %" : `Weight (${unit})`}
                 stroke="var(--color-steel)"
                 strokeWidth={2}
                 dot={{ r: 3, fill: "var(--color-steel)" }}
@@ -113,7 +171,7 @@ export function BodyweightChart() {
         </div>
       ) : (
         <p className="py-6 text-center text-sm text-ink-faint">
-          Log your weight to see the trend.
+          {shown === "fat" ? "Log a body-fat % to see the trend." : "Log your weight to see the trend."}
         </p>
       )}
 
@@ -122,7 +180,12 @@ export function BodyweightChart() {
           {[...entries].reverse().map((e) => (
             <li key={e.id} className="flex items-center justify-between border-t border-line py-1.5 text-sm">
               <span className="text-ink-faint">{e.logged_on}</span>
-              <span className="text-ink">{e.weight} {unit}</span>
+              <span className="text-ink">
+                {e.weight} {unit}
+                {e.body_fat_pct != null && (
+                  <span className="text-ink-faint"> · {e.body_fat_pct}%</span>
+                )}
+              </span>
               <button
                 onClick={() => remove(e.id)}
                 disabled={deleting === e.id}

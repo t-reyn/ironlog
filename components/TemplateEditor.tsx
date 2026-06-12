@@ -8,19 +8,29 @@ import { ExerciseIcon } from "./ExerciseIcon";
 import { ExercisePicker } from "./ExercisePicker";
 
 interface EditSet { weight: number; reps: number; }
-interface EditEx { exerciseId: string; sets: EditSet[]; }
+interface EditEx { exerciseId: string; rest: number | null; sets: EditSet[]; }
+
+// null = use the profile's default rest timer.
+const REST_CHOICES: { value: number | null; label: string }[] = [
+  { value: null, label: "Default" },
+  { value: 30, label: "30s" },
+  { value: 60, label: "60s" },
+  { value: 90, label: "90s" },
+  { value: 120, label: "120s" },
+  { value: 180, label: "180s" },
+];
 
 function buildExercises(t: TemplateWithSets): EditEx[] {
-  const byEx = new Map<string, EditSet[]>();
+  const byEx = new Map<string, EditEx>();
   const order: string[] = [];
   for (const s of [...t.sets].sort((a, b) => a.set_index - b.set_index)) {
     if (!byEx.has(s.exercise_id)) {
-      byEx.set(s.exercise_id, []);
+      byEx.set(s.exercise_id, { exerciseId: s.exercise_id, rest: s.rest_seconds ?? null, sets: [] });
       order.push(s.exercise_id);
     }
-    byEx.get(s.exercise_id)!.push({ weight: s.weight, reps: s.reps });
+    byEx.get(s.exercise_id)!.sets.push({ weight: s.weight, reps: s.reps });
   }
-  return order.map((exerciseId) => ({ exerciseId, sets: byEx.get(exerciseId)! }));
+  return order.map((id) => byEx.get(id)!);
 }
 
 export function TemplateEditor({
@@ -78,12 +88,22 @@ export function TemplateEditor({
     setSwappingIdx(null);
   }
 
+  function setRest(exIdx: number, rest: number | null) {
+    setExs((prev) => prev.map((ex, i) => (i === exIdx ? { ...ex, rest } : ex)));
+  }
+
   async function save() {
     if (!name.trim() || exs.length === 0) return;
     setSaving(true);
     try {
-      const sets = exs.flatMap(({ exerciseId, sets }) =>
-        sets.map((s, set_index) => ({ exercise_id: exerciseId, set_index, weight: s.weight, reps: s.reps })),
+      const sets = exs.flatMap(({ exerciseId, rest, sets }) =>
+        sets.map((s, set_index) => ({
+          exercise_id: exerciseId,
+          set_index,
+          weight: s.weight,
+          reps: s.reps,
+          rest_seconds: rest,
+        })),
       );
       await updateTemplate(template.id, name.trim(), sets);
       onSave();
@@ -171,6 +191,20 @@ export function TemplateEditor({
                   >
                     + Add set
                   </button>
+
+                  <div className="mt-2 flex items-center justify-between border-t border-line pt-2">
+                    <span className="text-xs text-ink-faint">Rest between sets</span>
+                    <select
+                      value={ex.rest ?? ""}
+                      onChange={(e) => setRest(exIdx, e.target.value ? parseInt(e.target.value) : null)}
+                      aria-label={`Rest for ${meta?.name ?? "exercise"}`}
+                      className="rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink-soft outline-none focus:border-ember"
+                    >
+                      {REST_CHOICES.map((c) => (
+                        <option key={c.label} value={c.value ?? ""}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               );
             })}
@@ -198,7 +232,7 @@ export function TemplateEditor({
       {picking && (
         <ExercisePicker
           onPick={(id) => {
-            setExs((prev) => [...prev, { exerciseId: id, sets: [{ weight: 0, reps: 0 }, { weight: 0, reps: 0 }, { weight: 0, reps: 0 }] }]);
+            setExs((prev) => [...prev, { exerciseId: id, rest: null, sets: [{ weight: 0, reps: 0 }, { weight: 0, reps: 0 }, { weight: 0, reps: 0 }] }]);
             setPicking(false);
           }}
           onClose={() => setPicking(false)}

@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { setTypeOf } from "./types";
 import type { Exercise, WorkoutWithSets } from "./types";
 import { blendedOneRepMax, round1 } from "./oneRepMax";
 
@@ -17,9 +18,10 @@ const COLUMNS = [
   "Exercise",
   "Muscle Group",
   "Set",
-  "Warmup",
+  "Type",
   "Weight",
   "Reps",
+  "Time (s)",
   "Est 1RM",
 ] as const;
 
@@ -36,16 +38,18 @@ export function exportWorkoutsToCsv(
     const sets = [...w.sets].sort((a, b) => a.set_index - b.set_index);
     for (const s of sets) {
       const ex = exById.get(s.exercise_id);
+      const type = setTypeOf(s);
       rows.push({
         Date: date,
         Workout: escapeFormula(w.name),
         Exercise: escapeFormula(ex?.name ?? "Unknown"),
         "Muscle Group": ex?.muscle_group ?? "",
         Set: String(s.set_index + 1),
-        Warmup: s.is_warmup ? "yes" : "",
+        Type: type === "normal" ? "" : type,
         Weight: String(s.weight),
         Reps: String(s.reps),
-        "Est 1RM": s.is_warmup ? "" : String(round1(blendedOneRepMax(s.weight, s.reps))),
+        "Time (s)": s.duration_seconds ? String(s.duration_seconds) : "",
+        "Est 1RM": type === "warmup" ? "" : String(round1(blendedOneRepMax(s.weight, s.reps))),
       });
     }
   }

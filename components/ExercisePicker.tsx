@@ -8,7 +8,12 @@ import {
   MUSCLE_COLORS,
   PATTERN_LABELS,
 } from "@/lib/muscles";
-import { ALL_MUSCLE_GROUPS, type MovementPattern, type MuscleGroup } from "@/lib/types";
+import {
+  ALL_MUSCLE_GROUPS,
+  type ExerciseType,
+  type MovementPattern,
+  type MuscleGroup,
+} from "@/lib/types";
 import { ExerciseIcon } from "./ExerciseIcon";
 
 const PATTERNS: MovementPattern[] = [
@@ -41,6 +46,7 @@ export function ExercisePicker({
   const [name, setName] = useState("");
   const [mg, setMg] = useState<MuscleGroup>("chest");
   const [pattern, setPattern] = useState<MovementPattern>("horizontal_press");
+  const [exType, setExType] = useState<ExerciseType>("weight_reps");
   const [busy, setBusy] = useState(false);
 
   const filtered = useMemo(() => {
@@ -60,6 +66,8 @@ export function ExercisePicker({
         muscle_group: mg,
         movement_pattern: pattern,
         equipment: "other",
+        exercise_type: exType,
+        secondary_muscles: [],
       });
       await refreshExercises();
       onPick(created.id);
@@ -125,6 +133,15 @@ export function ExercisePicker({
                 {PATTERN_LABELS[p]}
               </option>
             ))}
+          </select>
+          <label className="text-sm text-ink-soft">Tracks</label>
+          <select
+            value={exType}
+            onChange={(e) => setExType(e.target.value as ExerciseType)}
+            className="rounded-lg border border-line bg-surface px-3 py-2"
+          >
+            <option value="weight_reps">Weight × reps</option>
+            <option value="duration">Time (e.g. planks)</option>
           </select>
           <div className="flex gap-2">
             <button

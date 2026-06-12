@@ -3,6 +3,8 @@ import type {
   BodyweightEntry,
   Exercise,
   Profile,
+  Readiness,
+  SetType,
   Template,
   TemplateSet,
   Unit,
@@ -55,7 +57,10 @@ export async function listExercises(): Promise<Exercise[]> {
 }
 
 export async function createCustomExercise(
-  e: Pick<Exercise, "name" | "muscle_group" | "movement_pattern" | "equipment">,
+  e: Pick<
+    Exercise,
+    "name" | "muscle_group" | "movement_pattern" | "equipment" | "exercise_type" | "secondary_muscles"
+  >,
 ): Promise<Exercise> {
   const user_id = await uid();
   const { data, error } = await supabase
@@ -101,9 +106,31 @@ export interface DraftSet {
   weight: number;
   reps: number;
   rpe?: number | null;
-  is_warmup?: boolean;
+  set_type?: SetType;
   unit?: string;
   notes?: string | null;
+  duration_seconds?: number | null;
+  superset_group?: number | null;
+}
+
+function setRow(user_id: string, workout_id: string, s: DraftSet) {
+  const set_type = s.set_type ?? "normal";
+  return {
+    user_id,
+    workout_id,
+    exercise_id: s.exercise_id,
+    set_index: s.set_index,
+    weight: s.weight,
+    reps: s.reps,
+    rpe: s.rpe ?? null,
+    set_type,
+    is_warmup: set_type === "warmup", // dual-write for rows/readers predating set_type
+    completed: true,
+    unit: s.unit ?? "kg",
+    notes: s.notes ?? null,
+    duration_seconds: s.duration_seconds ?? null,
+    superset_group: s.superset_group ?? null,
+  };
 }
 
 export async function saveWorkout(input: {
@@ -111,6 +138,7 @@ export async function saveWorkout(input: {
   performed_at?: string;
   duration_seconds?: number | null;
   notes?: string | null;
+  readiness?: Readiness | null;
   sets: DraftSet[];
 }): Promise<string> {
   const user_id = await uid();
@@ -122,6 +150,9 @@ export async function saveWorkout(input: {
       performed_at: input.performed_at ?? new Date().toISOString(),
       duration_seconds: input.duration_seconds ?? null,
       notes: input.notes ?? null,
+      readiness_sleep: input.readiness?.sleep ?? null,
+      readiness_energy: input.readiness?.energy ?? null,
+      readiness_soreness: input.readiness?.soreness ?? null,
     })
     .select("id")
     .single();
@@ -129,19 +160,7 @@ export async function saveWorkout(input: {
   const workout_id = (w as { id: string }).id;
 
   if (input.sets.length) {
-    const rows = input.sets.map((s) => ({
-      user_id,
-      workout_id,
-      exercise_id: s.exercise_id,
-      set_index: s.set_index,
-      weight: s.weight,
-      reps: s.reps,
-      rpe: s.rpe ?? null,
-      is_warmup: s.is_warmup ?? false,
-      completed: true,
-      unit: s.unit ?? "kg",
-      notes: s.notes ?? null,
-    }));
+    const rows = input.sets.map((s) => setRow(user_id, workout_id, s));
     const { error: e2 } = await supabase.from("workout_sets").insert(rows);
     if (e2) {
       // Don't leave an orphan workout with no sets behind.
@@ -156,7 +175,7 @@ export async function listWorkouts(): Promise<WorkoutWithSets[]> {
   const { data, error } = await supabase
     .from("workouts")
     .select(
-      "id, user_id, name, performed_at, duration_seconds, notes, sets:workout_sets(*)",
+      "id, user_id, name, performed_at, duration_seconds, notes, readiness_sleep, readiness_energy, readiness_soreness, sets:workout_sets(*)",
     )
     .order("performed_at", { ascending: false });
   if (error) throw error;
@@ -167,6 +186,7 @@ export async function updateWorkout(
   id: string,
   name: string,
   sets: DraftSet[],
+  notes?: string | null,
 ): Promise<void> {
   const user_id = await uid();
   // Capture the existing set IDs so we can remove them only AFTER the new ones
@@ -178,23 +198,14 @@ export async function updateWorkout(
   if (e0) throw e0;
   const oldIds = (existing ?? []).map((r) => (r as { id: string }).id);
 
-  const { error: e1 } = await supabase.from("workouts").update({ name }).eq("id", id);
+  const { error: e1 } = await supabase
+    .from("workouts")
+    .update({ name, notes: notes ?? null })
+    .eq("id", id);
   if (e1) throw e1;
 
   if (sets.length) {
-    const rows = sets.map((s) => ({
-      user_id,
-      workout_id: id,
-      exercise_id: s.exercise_id,
-      set_index: s.set_index,
-      weight: s.weight,
-      reps: s.reps,
-      rpe: s.rpe ?? null,
-      is_warmup: s.is_warmup ?? false,
-      completed: true,
-      unit: s.unit ?? "kg",
-      notes: s.notes ?? null,
-    }));
+    const rows = sets.map((s) => setRow(user_id, id, s));
     const { error: e3 } = await supabase.from("workout_sets").insert(rows);
     if (e3) throw e3; // old sets are still intact — nothing lost
   }
@@ -224,9 +235,17 @@ export async function listTemplates(): Promise<TemplateWithSets[]> {
   return (data ?? []) as unknown as TemplateWithSets[];
 }
 
+export interface TemplateSetInput {
+  exercise_id: string;
+  set_index: number;
+  weight: number;
+  reps: number;
+  rest_seconds?: number | null;
+}
+
 export async function saveTemplate(input: {
   name: string;
-  sets: { exercise_id: string; set_index: number; weight: number; reps: number }[];
+  sets: TemplateSetInput[];
 }): Promise<string> {
   const user_id = await uid();
   const { data: t, error } = await supabase
@@ -247,7 +266,7 @@ export async function saveTemplate(input: {
 export async function updateTemplate(
   id: string,
   name: string,
-  sets: { exercise_id: string; set_index: number; weight: number; reps: number }[],
+  sets: TemplateSetInput[],
 ): Promise<void> {
   const user_id = await uid();
   const { error: e1 } = await supabase.from("templates").update({ name }).eq("id", id);
@@ -266,11 +285,45 @@ export async function deleteTemplate(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// --- Exercise notes (persistent, per-user, work for built-ins too) ----------
+export async function listExerciseNotes(): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from("exercise_notes")
+    .select("exercise_id, note");
+  if (error) throw error;
+  const map: Record<string, string> = {};
+  for (const r of (data ?? []) as { exercise_id: string; note: string }[]) {
+    map[r.exercise_id] = r.note;
+  }
+  return map;
+}
+
+export async function upsertExerciseNote(exercise_id: string, note: string): Promise<void> {
+  const user_id = await uid();
+  const trimmed = note.trim();
+  if (!trimmed) {
+    const { error } = await supabase
+      .from("exercise_notes")
+      .delete()
+      .eq("user_id", user_id)
+      .eq("exercise_id", exercise_id);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase
+    .from("exercise_notes")
+    .upsert(
+      { user_id, exercise_id, note: trimmed, updated_at: new Date().toISOString() },
+      { onConflict: "user_id,exercise_id" },
+    );
+  if (error) throw error;
+}
+
 // --- Bodyweight ------------------------------------------------------------
 export async function listBodyweight(): Promise<BodyweightEntry[]> {
   const { data, error } = await supabase
     .from("bodyweight_entries")
-    .select("id, logged_on, weight, unit")
+    .select("id, logged_on, weight, unit, body_fat_pct")
     .order("logged_on");
   if (error) throw error;
   return (data ?? []) as BodyweightEntry[];
@@ -284,17 +337,21 @@ export async function deleteBodyweight(id: string): Promise<void> {
 export async function upsertBodyweight(
   weight: number,
   unit: Unit,
+  bodyFatPct?: number | null,
   logged_on?: string,
 ): Promise<void> {
   const user_id = await uid();
-  const { error } = await supabase.from("bodyweight_entries").upsert(
-    {
-      user_id,
-      weight,
-      unit,
-      logged_on: logged_on ?? new Date().toISOString().slice(0, 10),
-    },
-    { onConflict: "user_id,logged_on" },
-  );
+  const row: Record<string, unknown> = {
+    user_id,
+    weight,
+    unit,
+    logged_on: logged_on ?? new Date().toISOString().slice(0, 10),
+  };
+  // Only touch body_fat_pct when provided, so re-logging weight alone
+  // doesn't null out an earlier body-fat reading for the same day.
+  if (bodyFatPct != null) row.body_fat_pct = bodyFatPct;
+  const { error } = await supabase
+    .from("bodyweight_entries")
+    .upsert(row, { onConflict: "user_id,logged_on" });
   if (error) throw error;
 }

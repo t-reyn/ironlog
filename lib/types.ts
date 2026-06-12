@@ -22,6 +22,16 @@ export type MovementPattern =
 
 export type Unit = "kg" | "lb";
 
+export type ExerciseType = "weight_reps" | "duration";
+
+export type SetType = "normal" | "warmup" | "drop";
+
+export const KG_PER_LB = 0.45359237;
+
+export function toKg(weight: number, unit: Unit | undefined): number {
+  return unit === "lb" ? weight * KG_PER_LB : weight;
+}
+
 export interface Profile {
   id: string;
   unit: Unit;
@@ -36,6 +46,8 @@ export interface Exercise {
   movement_pattern: MovementPattern;
   equipment: string;
   is_custom: boolean;
+  exercise_type: ExerciseType;
+  secondary_muscles: MuscleGroup[];
 }
 
 export interface Workout {
@@ -45,6 +57,9 @@ export interface Workout {
   performed_at: string;
   duration_seconds: number | null;
   notes: string | null;
+  readiness_sleep: number | null;
+  readiness_energy: number | null;
+  readiness_soreness: number | null;
 }
 
 export interface WorkoutSet {
@@ -59,6 +74,14 @@ export interface WorkoutSet {
   completed: boolean;
   unit?: Unit;
   notes?: string | null;
+  set_type?: SetType;
+  duration_seconds?: number | null;
+  superset_group?: number | null;
+}
+
+/** set_type with fallback for rows written before the column existed. */
+export function setTypeOf(s: Pick<WorkoutSet, "set_type" | "is_warmup">): SetType {
+  return s.set_type ?? (s.is_warmup ? "warmup" : "normal");
 }
 
 export interface Template {
@@ -75,6 +98,7 @@ export interface TemplateSet {
   set_index: number;
   weight: number;
   reps: number;
+  rest_seconds?: number | null;
 }
 
 export interface BodyweightEntry {
@@ -82,6 +106,14 @@ export interface BodyweightEntry {
   logged_on: string;
   weight: number;
   unit: Unit;
+  body_fat_pct?: number | null;
+}
+
+/** Pre-session readiness check-in, 1-5 each (null = not answered). */
+export interface Readiness {
+  sleep: number | null;
+  energy: number | null;
+  soreness: number | null;
 }
 
 /** A workout joined with its sets — convenient shape for charts/CSV/dashboard. */
