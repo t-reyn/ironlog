@@ -418,6 +418,9 @@ create table if not exists feedback (
 );
 -- Dev-only triage flag: set true once the suggestion has shipped.
 alter table feedback add column if not exists addressed boolean not null default false;
+-- Set by the local feedback-notifier (shojin-feedback-notifier/) once a row
+-- has been emailed to the dev; null = not yet notified.
+alter table feedback add column if not exists notified_at timestamptz;
 alter table feedback enable row level security;
 do $$
 begin
