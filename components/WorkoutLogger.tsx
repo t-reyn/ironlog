@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { useStore, type DraftExercise } from "@/lib/store";
 import { saveTemplate } from "@/lib/db";
 import { MUSCLE_COLORS, MUSCLE_LABELS } from "@/lib/muscles";
@@ -52,6 +52,9 @@ function fmtClock(totalSec: number): string {
 function fmtRest(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 }
+
+// No set logged for this long → treat the workout as paused (forgotten).
+const IDLE_PAUSE_MS = 10 * 60 * 1000;
 
 interface ExerciseView {
   ex: DraftExercise;
@@ -119,6 +122,32 @@ function SheetRow({
   );
 }
 
+/** Inline link toggle shown between adjacent exercise cards — supersets the
+ *  card below with the one above (no longer buried in the ⋯ sheet). */
+function SupersetLink({ linked, onToggle }: { linked: boolean; onToggle: () => void }) {
+  return (
+    <div className="-my-0.5 flex justify-center">
+      <button
+        onClick={onToggle}
+        aria-pressed={linked}
+        aria-label={linked ? "Unlink superset" : "Superset with exercise above"}
+        title={
+          linked
+            ? "Supersetted with the exercise above — tap to unlink"
+            : "Superset with the exercise above"
+        }
+        className={[
+          "flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide",
+          linked ? "border-amber/40 bg-amber-soft text-amber" : "border-line bg-surface text-ink-faint",
+        ].join(" ")}
+      >
+        <Icon name="link" size={12} color="currentColor" />
+        {linked ? "Superset" : "Link superset"}
+      </button>
+    </div>
+  );
+}
+
 export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const draft = useStore((s) => s.draft);
   const setName = useStore((s) => s.setDraftName);
@@ -169,14 +198,16 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const views: ExerciseView[] = draft.exercises.map((ex) => {
     const meta = exerciseById(ex.exerciseId);
     const exUnit = ex.unit ?? unit;
-    const sessions = draft.workoutId || !meta ? [] : recentSessionsFor(workouts, ex.exerciseId);
+    // Previous-session hints show in both new and edit drafts (excluding the
+    // workout being edited); progressive-overload suggestions stay off for edits.
+    const sessions = !meta ? [] : recentSessionsFor(workouts, ex.exerciseId, draft.workoutId);
     return {
       ex,
       meta,
       exUnit,
       isDuration: meta?.exercise_type === "duration",
       isBodyweight: meta?.equipment === "bodyweight",
-      suggestion: sessions.length && meta ? suggestNextLoad(meta, sessions, exUnit) : null,
+      suggestion: !draft.workoutId && sessions.length && meta ? suggestNextLoad(meta, sessions, exUnit) : null,
       prevHints: prevHintsFor(sessions[0] ?? [], ex.sets.map((s) => s.setType), exUnit),
       doneCount: ex.sets.filter((s) => s.done).length,
       activeSetIdx: ex.sets.findIndex((s) => !s.done),
@@ -191,7 +222,12 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
       ? { exIdx: expandedIdx, setIdx: expanded.activeSetIdx }
       : null;
 
-  const elapsedStr = fmtClock(Math.max(0, Math.floor((now - draft.startedAt) / 1000)));
+  // Freeze the clock once a workout has been idle a while (left open and
+  // forgotten) so the displayed — and saved — length stops climbing. It
+  // resumes the moment another set is logged.
+  const idle = completedSets > 0 && now - draft.lastActiveAt > IDLE_PAUSE_MS;
+  const elapsedMs = idle ? draft.lastActiveAt - draft.startedAt : now - draft.startedAt;
+  const elapsedStr = fmtClock(Math.max(0, Math.floor(elapsedMs / 1000)));
 
   function scrollToCard(idx: number) {
     requestAnimationFrame(() => {
@@ -415,7 +451,9 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
       : eff.weight > 0 || expanded.isBodyweight
         ? `${expanded.isBodyweight ? "+" : ""}${eff.weight} ${expanded.exUnit} × ${eff.reps}`
         : `${eff.reps} reps`;
-    activeSummary = { n: set.setType === "warmup" ? "W" : `${activeSet.setIdx + 1}`, what };
+    const n =
+      set.setType === "warmup" ? "warm-up" : set.setType === "drop" ? "drop" : `${activeSet.setIdx + 1}`;
+    activeSummary = { n, what };
   }
 
   const keypadView = keypad ? views[keypad.exIdx] : null;
@@ -435,7 +473,8 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
         <button onClick={renameWorkout} className="min-w-0 flex-1 text-left" title="Tap to rename">
           <div className="truncate text-[17px] font-bold tracking-[-0.015em] text-ink">{draft.name}</div>
           <div className="mt-px font-mono text-[11.5px] text-ink-faint">
-            <span className="font-semibold text-amber">{elapsedStr}</span> · {completedSets}/{totalSets} SETS
+            <span className={idle ? "font-semibold text-ink-faint" : "font-semibold text-amber"}>{elapsedStr}</span>
+            {idle ? <span className="text-ink-faint"> PAUSED</span> : null} · {completedSets}/{totalSets} SETS
           </div>
         </button>
         <button
@@ -483,17 +522,23 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
             const complete = ex.sets.length > 0 && v.doneCount === ex.sets.length;
             const inSuperset = ex.linkedWithPrev || (draft.exercises[exIdx + 1]?.linkedWithPrev ?? false);
 
+            const linkRow =
+              exIdx > 0 ? (
+                <SupersetLink linked={ex.linkedWithPrev} onToggle={() => toggleLink(exIdx)} />
+              ) : null;
+
             if (!isExpanded) {
               return (
-                <button
-                  key={`${ex.exerciseId}-${exIdx}`}
-                  data-ex-card={exIdx}
-                  onClick={() => expandExercise(exIdx)}
-                  className={[
-                    "flex items-center gap-3 rounded-[20px] border bg-surface px-3.5 py-2.5 text-left shadow-[var(--rp-shadow-sm)]",
-                    inSuperset ? "border-amber/40" : "border-line-2",
-                  ].join(" ")}
-                >
+                <Fragment key={`${ex.exerciseId}-${exIdx}`}>
+                  {linkRow}
+                  <button
+                    data-ex-card={exIdx}
+                    onClick={() => expandExercise(exIdx)}
+                    className={[
+                      "flex items-center gap-3 rounded-[20px] border bg-surface px-3.5 py-2.5 text-left shadow-[var(--rp-shadow-sm)]",
+                      inSuperset ? "border-amber/40" : "border-line-2",
+                    ].join(" ")}
+                  >
                   <span style={{ color }}>
                     <ExerciseIcon name={meta?.name} pattern={meta?.movement_pattern ?? "other"} size={30} />
                   </span>
@@ -505,28 +550,30 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
                       {collapsedMeta(v)}
                     </span>
                   </span>
-                  {complete ? (
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green">
-                      <Icon name="check" size={13} color="var(--color-on-green)" sw={2.6} />
-                    </span>
-                  ) : (
-                    <span className="shrink-0 text-ink-faint">
-                      <Icon name="chevron" size={16} color="currentColor" style={{ transform: "rotate(90deg)" }} />
-                    </span>
-                  )}
-                </button>
+                    {complete ? (
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green">
+                        <Icon name="check" size={13} color="var(--color-on-green)" sw={2.6} />
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-ink-faint">
+                        <Icon name="chevron" size={16} color="currentColor" style={{ transform: "rotate(90deg)" }} />
+                      </span>
+                    )}
+                  </button>
+                </Fragment>
               );
             }
 
             return (
-              <div
-                key={`${ex.exerciseId}-${exIdx}`}
-                data-ex-card={exIdx}
-                className={[
-                  "rounded-[24px] border bg-surface px-3.5 pb-1.5 pt-4 shadow-[var(--rp-shadow-sm)]",
-                  inSuperset ? "border-amber/40" : "border-line-2",
-                ].join(" ")}
-              >
+              <Fragment key={`${ex.exerciseId}-${exIdx}`}>
+                {linkRow}
+                <div
+                  data-ex-card={exIdx}
+                  className={[
+                    "rounded-[24px] border bg-surface px-3.5 pb-1.5 pt-4 shadow-[var(--rp-shadow-sm)]",
+                    inSuperset ? "border-amber/40" : "border-line-2",
+                  ].join(" ")}
+                >
                 <div className="mb-1 flex items-center gap-3">
                   <span style={{ color }}>
                     <ExerciseIcon name={meta?.name} pattern={meta?.movement_pattern ?? "other"} size={38} />
@@ -555,6 +602,19 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
                       {suggestionLabel(v.suggestion, v.exUnit)}
                     </button>
                   )}
+                  <button
+                    onClick={() => editPinnedNote(ex.exerciseId, meta?.name ?? "this exercise")}
+                    aria-label={pinned ? "Edit pinned note" : "Pin a note to this exercise"}
+                    title={pinned ? "Edit pinned note" : "Pin a note (setup cues, seat heights…)"}
+                    className={[
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors",
+                      pinned
+                        ? "border-amber/40 bg-amber-soft text-amber"
+                        : "border-line bg-surface text-ink-faint hover:text-ink",
+                    ].join(" ")}
+                  >
+                    <Icon name="pin" size={16} color="currentColor" />
+                  </button>
                 </div>
 
                 {pinned && (
@@ -616,7 +676,8 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
                     REST {fmtRest(ex.restSeconds ?? restDuration)}
                   </span>
                 </div>
-              </div>
+                </div>
+              </Fragment>
             );
           })}
 
@@ -686,6 +747,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
           field={keypad.field}
           values={effectiveValues(keypadSet, keypadView.prevHints[keypad.setIdx])}
           rpe={keypadSet.rpe}
+          setType={keypadSet.setType}
           unit={keypadView.exUnit}
           isBodyweight={keypadView.isBodyweight}
           isDuration={keypadView.isDuration}
@@ -693,6 +755,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
           onField={(field) => setKeypad({ ...keypad, field })}
           onInput={(field, value) => updateSet(keypad.exIdx, keypad.setIdx, { [field]: value })}
           onRpe={(rpe) => updateSet(keypad.exIdx, keypad.setIdx, { rpe })}
+          onSetType={(setType) => updateSet(keypad.exIdx, keypad.setIdx, { setType })}
           onLog={() => commitSet(keypad.exIdx, keypad.setIdx, true)}
           onClose={() => setKeypad(null)}
         />

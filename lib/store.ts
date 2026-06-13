@@ -33,6 +33,7 @@ export interface DraftExercise {
 export interface Draft {
   name: string;
   startedAt: number;
+  lastActiveAt: number; // last set interaction — drives idle detection + saved length
   exercises: DraftExercise[];
   notes: string; // workout comment, saved to workouts.notes
   readiness: Readiness;
@@ -46,6 +47,7 @@ function normalizeDraft(d: Draft): Draft {
   return {
     ...d,
     notes: d.notes ?? "",
+    lastActiveAt: d.lastActiveAt ?? d.startedAt ?? Date.now(),
     readiness: d.readiness ?? EMPTY_READINESS,
     exercises: (d.exercises ?? []).map((ex) => ({
       ...ex,
@@ -234,6 +236,7 @@ export const useStore = create<StoreState>((set, get) => ({
       draft: {
         name: "Workout",
         startedAt: Date.now(),
+        lastActiveAt: Date.now(),
         exercises: [],
         notes: "",
         readiness: EMPTY_READINESS,
@@ -262,6 +265,7 @@ export const useStore = create<StoreState>((set, get) => ({
       draft: {
         name: t.name,
         startedAt: Date.now(),
+        lastActiveAt: Date.now(),
         notes: "",
         readiness: EMPTY_READINESS,
         exercises: order.map((exerciseId) => ({
@@ -282,6 +286,7 @@ export const useStore = create<StoreState>((set, get) => ({
       draft: {
         name: w.name,
         startedAt: Date.now(),
+        lastActiveAt: Date.now(),
         notes: "",
         readiness: EMPTY_READINESS,
         exercises: draftExercisesFromWorkout(w, defaultUnit, "repeat"),
@@ -295,6 +300,7 @@ export const useStore = create<StoreState>((set, get) => ({
       draft: {
         name: w.name,
         startedAt: Date.now(),
+        lastActiveAt: Date.now(),
         workoutId: w.id,
         notes: w.notes ?? "",
         readiness: {
@@ -447,7 +453,9 @@ export const useStore = create<StoreState>((set, get) => ({
         sets: ex.sets.map((s, j) => (j === setIdx ? { ...s, ...patch } : s)),
       };
     });
-    set({ draft: { ...draft, exercises } });
+    // Any set interaction counts as activity — keeps the idle clock from
+    // ballooning the saved length when a workout is left open and forgotten.
+    set({ draft: { ...draft, exercises, lastActiveAt: Date.now() } });
   },
 
   removeDraftSet: (exIdx, setIdx) => {
@@ -514,7 +522,9 @@ export const useStore = create<StoreState>((set, get) => ({
       await db.saveWorkout({
         name: draft.name,
         performed_at: new Date(draft.startedAt).toISOString(),
-        duration_seconds: Math.round((Date.now() - draft.startedAt) / 1000),
+        // Measure to the last logged set, not the moment Finish was tapped —
+        // a workout left open for hours shouldn't record hours of "training".
+        duration_seconds: Math.max(0, Math.round((draft.lastActiveAt - draft.startedAt) / 1000)),
         notes: workoutNotes,
         readiness: draft.readiness,
         sets,
