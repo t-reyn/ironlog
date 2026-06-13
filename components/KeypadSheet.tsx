@@ -25,6 +25,9 @@ function fmtNum(n: number): string {
 }
 
 interface Props {
+  /** Identity of the set being edited — typed digits reset when it changes
+   *  (the sheet itself stays mounted, so the slide-up only plays once). */
+  setKey: string;
   exerciseName: string;
   setNumber: number;
   totalSets: number;
@@ -44,6 +47,7 @@ interface Props {
 }
 
 export function KeypadSheet({
+  setKey,
   exerciseName,
   setNumber,
   totalSets,
@@ -61,25 +65,28 @@ export function KeypadSheet({
   onLog,
   onClose,
 }: Props) {
-  // Raw digits typed since this field was focused; null = untouched, so the
-  // cells show the current (effective) value until the first keypress.
-  const [entry, setEntry] = useState<{ field: ValueField; text: string } | null>(null);
+  // Raw digits typed since this field was focused; stale when the set or
+  // field changes, so the cells show the current (effective) value instead.
+  const [entry, setEntry] = useState<{ setKey: string; field: ValueField; text: string } | null>(
+    null,
+  );
+  const fresh = entry && entry.setKey === setKey && entry.field === field ? entry.text : null;
 
   const secondField: ValueField = isDuration ? "seconds" : "reps";
   const inc = field === "weight" ? incrementFor(equipment, unit) : field === "seconds" ? 10 : 1;
 
   function displayFor(f: ValueField): string {
-    if (entry && entry.field === f) return entry.text || "0";
+    if (entry && entry.setKey === setKey && entry.field === f) return entry.text || "0";
     return fmtNum(values[f]);
   }
 
   function commitText(f: ValueField, text: string) {
-    setEntry({ field: f, text });
+    setEntry({ setKey, field: f, text });
     onInput(f, parseFloat(text) || 0);
   }
 
   function pressDigit(d: string) {
-    const base = entry?.field === field ? entry.text : "";
+    const base = fresh ?? "";
     if (d === "." && (field !== "weight" || base.includes("."))) return;
     const next = base === "0" && d !== "." ? d : base + d;
     if (next.replace(".", "").length > 5) return;
@@ -87,18 +94,17 @@ export function KeypadSheet({
   }
 
   function backspace() {
-    const base = entry?.field === field ? entry.text : fmtNum(values[field]);
+    const base = fresh ?? fmtNum(values[field]);
     commitText(field, base.slice(0, -1));
   }
 
   function nudge(delta: number) {
     const next = Math.max(0, Math.round((values[field] + delta) * 100) / 100);
-    setEntry({ field, text: fmtNum(next) });
-    onInput(field, next);
+    commitText(field, fmtNum(next));
   }
 
   function setTo(f: ValueField, v: number) {
-    setEntry({ field: f, text: fmtNum(v) });
+    setEntry({ setKey, field: f, text: fmtNum(v) });
     onInput(f, v);
   }
 
@@ -170,12 +176,13 @@ export function KeypadSheet({
         <span className="mx-auto block h-1 w-[38px] rounded-full bg-line" />
       </button>
 
-      <div className="mb-2.5 flex items-center justify-between">
-        <span className="rp-eyebrow min-w-0 truncate">
-          {exerciseName} · SET {setNumber} OF {totalSets}
+      <div className="mb-2.5 flex items-center justify-between gap-2">
+        <span className="rp-eyebrow flex min-w-0 items-baseline">
+          <span className="truncate">{exerciseName}</span>
+          <span className="shrink-0 whitespace-pre">{` · SET ${setNumber} OF ${totalSets}`}</span>
         </span>
         <span className="shrink-0 font-mono text-[11px] uppercase text-ink-faint">
-          {prev ? `LAST ${fmtPrev(prev, isDuration)}` : ""}
+          {prev ? `LAST ${fmtPrev(prev, isDuration, isBodyweight)}` : ""}
         </span>
       </div>
 

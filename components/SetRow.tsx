@@ -28,9 +28,15 @@ export function effectiveValues(set: DraftSetEntry, prev: PrevHint | null | unde
   };
 }
 
-export function fmtPrev(prev: PrevHint | null | undefined, isDuration: boolean): string {
+export function fmtPrev(
+  prev: PrevHint | null | undefined,
+  isDuration: boolean,
+  isBodyweight = false,
+): string {
   if (!prev) return "—";
-  const core = isDuration ? `${prev.seconds}s` : `${prev.weight} × ${prev.reps}`;
+  const core = isDuration
+    ? `${prev.seconds}s`
+    : `${isBodyweight ? "+" : ""}${prev.weight} × ${prev.reps}`;
   return prev.rpe != null ? `${core} @${prev.rpe}` : core;
 }
 
@@ -53,10 +59,10 @@ function ValueCell({
       aria-label={label}
       className={[
         "flex h-11 items-center justify-center rounded-xl font-mono text-base font-semibold transition-colors",
-        done
-          ? "border border-transparent bg-transparent text-ink"
-          : focused
-            ? "border-[1.5px] border-amber bg-surface text-ink"
+        focused
+          ? "border-[1.5px] border-amber bg-surface text-ink"
+          : done
+            ? "border border-transparent bg-transparent text-ink"
             : "border border-line bg-surface text-ink-faint",
       ].join(" ")}
     >
@@ -101,6 +107,7 @@ export function SetRow({
   const insert = useStore((s) => s.insertDraftSet);
 
   const pressTimer = useRef<number | null>(null);
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null);
   const longPressed = useRef(false);
 
   const isDuration = exerciseType === "duration";
@@ -129,9 +136,11 @@ export function SetRow({
     });
   }
 
-  // Long-press anywhere on the row deletes the set (toast Undo keeps it forgiving).
-  function pressStart() {
+  // Long-press anywhere on the row deletes the set (toast Undo keeps it
+  // forgiving). A ~12px slop tolerates finger jitter but still yields to scrolls.
+  function pressStart(e: React.PointerEvent) {
     longPressed.current = false;
+    pressOrigin.current = { x: e.clientX, y: e.clientY };
     pressTimer.current = window.setTimeout(() => {
       longPressed.current = true;
       removeWithUndo();
@@ -142,6 +151,14 @@ export function SetRow({
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
     }
+    pressOrigin.current = null;
+  }
+  function pressMove(e: React.PointerEvent) {
+    const o = pressOrigin.current;
+    if (!o) return;
+    const dx = e.clientX - o.x;
+    const dy = e.clientY - o.y;
+    if (dx * dx + dy * dy > 144) pressEnd();
   }
   function guard(fn: () => void) {
     return () => {
@@ -152,10 +169,11 @@ export function SetRow({
 
   return (
     <div
+      data-set-row={`${exIdx}-${setIdx}`}
       onPointerDown={pressStart}
       onPointerUp={pressEnd}
       onPointerLeave={pressEnd}
-      onPointerMove={pressEnd}
+      onPointerMove={pressMove}
       onContextMenu={(e) => e.preventDefault()}
       className={["mb-0.5 grid items-center gap-2 rounded-[14px] px-1 py-[5px]", active ? "bg-amber-soft" : ""].join(" ")}
       style={{ gridTemplateColumns: SET_GRID_COLS }}
@@ -180,7 +198,7 @@ export function SetRow({
       </button>
 
       <div className="min-w-0 truncate font-mono text-[12.5px] text-ink-faint">
-        {fmtPrev(prev, isDuration)}
+        {fmtPrev(prev, isDuration, isBodyweight)}
       </div>
 
       <ValueCell

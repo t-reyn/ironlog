@@ -211,6 +211,34 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
     scrollToCard(idx);
   }
 
+  // Keep the row being edited visible above the keypad sheet. Runs a beat
+  // after setKeypad so the mounted sheet's real height can be measured.
+  function scrollRowVisible(exIdx: number, setIdx: number) {
+    setTimeout(() => {
+      const container = scrollRef.current;
+      const row = container?.querySelector<HTMLElement>(`[data-set-row="${exIdx}-${setIdx}"]`);
+      if (!container || !row) return;
+      // Height, not top — the slide-up animation translates the sheet, so its
+      // top is mid-flight when this runs; its height is already final.
+      const sheet = document.querySelector('[role="dialog"][aria-label^="Keypad"]');
+      const sheetH = sheet ? sheet.getBoundingClientRect().height : 480;
+      const limit = window.innerHeight - sheetH - 10;
+      const containerTop = container.getBoundingClientRect().top;
+      const r = row.getBoundingClientRect();
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (r.bottom > limit) {
+        container.scrollBy({ top: r.bottom - limit, behavior: reduce ? "auto" : "smooth" });
+      } else if (r.top < containerTop) {
+        container.scrollBy({ top: r.top - containerTop - 10, behavior: reduce ? "auto" : "smooth" });
+      }
+    }, 60);
+  }
+
+  function openKeypad(exIdx: number, setIdx: number, field: ValueField) {
+    setKeypad({ exIdx, setIdx, field });
+    scrollRowVisible(exIdx, setIdx);
+  }
+
   /** Commit a set with its effective (entered or ghost-prefilled) values. */
   function commitSet(exIdx: number, setIdx: number, viaKeypad: boolean) {
     if (!draft) return;
@@ -218,7 +246,8 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
     const set = v.ex.sets[setIdx];
     const eff = effectiveValues(set, v.prevHints[setIdx]);
     updateSet(exIdx, setIdx, { ...eff, done: true });
-    if (set.setType === "normal") startRest(v.ex.restSeconds ?? restDuration);
+    // Re-logging an already-done set (editing its values) shouldn't restart rest.
+    if (!set.done && set.setType === "normal") startRest(v.ex.restSeconds ?? restDuration);
 
     const nextSetIdx = v.ex.sets.findIndex((s, i) => i !== setIdx && !s.done);
     if (nextSetIdx === -1) {
@@ -235,6 +264,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
       }
     } else if (viaKeypad) {
       setKeypad({ exIdx, setIdx: nextSetIdx, field: "weight" });
+      scrollRowVisible(exIdx, nextSetIdx);
     }
   }
 
@@ -421,6 +451,10 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const keypadView = keypad ? views[keypad.exIdx] : null;
   const keypadSet = keypad && keypadView ? keypadView.ex.sets[keypad.setIdx] : null;
 
+  // When the expanded exercise is finished but others aren't, offer the jump
+  // instead of a misleading Finish.
+  const nextIncompleteIdx = activeSummary ? -1 : views.findIndex((v) => v.activeSetIdx >= 0);
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-night">
       {/* Header */}
@@ -595,10 +629,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
                     focusField={
                       keypad && keypad.exIdx === exIdx && keypad.setIdx === setIdx ? keypad.field : null
                     }
-                    onTapValue={(field) => {
-                      if (set.done) return;
-                      setKeypad({ exIdx, setIdx, field });
-                    }}
+                    onTapValue={(field) => openKeypad(exIdx, setIdx, field)}
                     onToggleDone={() => toggleDone(exIdx, setIdx)}
                   />
                 ))}
@@ -654,6 +685,14 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
                   <Icon name="check" size={17} color="currentColor" sw={2.6} />
                   Log set {activeSummary.n} — {activeSummary.what}
                 </button>
+              ) : nextIncompleteIdx >= 0 ? (
+                <button
+                  onClick={() => expandExercise(nextIncompleteIdx)}
+                  className="flex h-[50px] flex-1 items-center justify-center gap-2 rounded-full bg-green text-[15.5px] font-bold text-on-green"
+                >
+                  Next: {views[nextIncompleteIdx].meta?.name ?? "exercise"}
+                  <Icon name="chevron" size={16} color="currentColor" />
+                </button>
               ) : (
                 <button
                   onClick={onFinish}
@@ -678,7 +717,7 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
       {/* Keypad sheet */}
       {keypad && keypadView && keypadSet && (
         <KeypadSheet
-          key={`${keypad.exIdx}:${keypad.setIdx}`}
+          setKey={`${keypad.exIdx}:${keypad.setIdx}`}
           exerciseName={keypadView.meta?.name ?? "Exercise"}
           setNumber={keypad.setIdx + 1}
           totalSets={keypadView.ex.sets.length}

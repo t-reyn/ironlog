@@ -35,13 +35,16 @@ function TemplateCard({
   onManage: () => void;
 }) {
   const pressTimer = useRef<number | null>(null);
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null);
   const longPressed = useRef(false);
 
   const exCount = new Set(template.sets.map((s) => s.exercise_id)).size;
   const setCount = template.sets.length;
 
-  function pressStart() {
+  // ~12px slop so finger jitter doesn't cancel the hold, but scrolling does.
+  function pressStart(e: React.PointerEvent) {
     longPressed.current = false;
+    pressOrigin.current = { x: e.clientX, y: e.clientY };
     pressTimer.current = window.setTimeout(() => {
       longPressed.current = true;
       onManage();
@@ -52,6 +55,14 @@ function TemplateCard({
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
     }
+    pressOrigin.current = null;
+  }
+  function pressMove(e: React.PointerEvent) {
+    const o = pressOrigin.current;
+    if (!o) return;
+    const dx = e.clientX - o.x;
+    const dy = e.clientY - o.y;
+    if (dx * dx + dy * dy > 144) pressEnd();
   }
 
   return (
@@ -59,7 +70,7 @@ function TemplateCard({
       onPointerDown={pressStart}
       onPointerUp={pressEnd}
       onPointerLeave={pressEnd}
-      onPointerMove={pressEnd}
+      onPointerMove={pressMove}
       onContextMenu={(e) => e.preventDefault()}
       className="flex items-center gap-3 rounded-[22px] border border-line-2 bg-surface px-3.5 py-3 shadow-[var(--rp-shadow-sm)]"
       title="Hold to edit or delete"

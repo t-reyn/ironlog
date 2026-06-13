@@ -245,7 +245,9 @@ export function Progress() {
       <div className="rounded-[28px] border border-line-2 bg-surface p-[18px] shadow-[var(--rp-shadow-sm)]">
         <Eyebrow>{selectedName ? `${selectedName.toUpperCase()} · ${metricLabel.toUpperCase()}` : metricLabel.toUpperCase()}</Eyebrow>
         <div className="mt-2 flex items-baseline gap-2.5">
-          <span className="text-[36px] font-extrabold leading-none tracking-[-0.03em]">{latest}</span>
+          <span className="text-[36px] font-extrabold leading-none tracking-[-0.03em]">
+            {data.length ? latest : "—"}
+          </span>
           <span className="font-mono text-[15px] text-ink-faint">{unitLabel}</span>
           {data.length > 1 && diff !== 0 && (
             <span className="ml-auto">
@@ -254,6 +256,11 @@ export function Progress() {
           )}
         </div>
 
+        {data.length === 0 ? (
+          <div className="mt-3.5 flex h-[150px] w-full items-center justify-center text-sm text-ink-faint">
+            No logged sets for this exercise yet.
+          </div>
+        ) : (
         <div className="mt-3.5 h-[150px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
@@ -309,6 +316,7 @@ export function Progress() {
             </ComposedChart>
           </ResponsiveContainer>
         </div>
+        )}
       </div>
 
       {/* volume by muscle */}
