@@ -3,9 +3,15 @@
 import { useState, type ReactNode } from "react";
 import { incrementFor } from "@/lib/progression";
 import type { PrevHint } from "@/lib/progression";
-import type { Unit } from "@/lib/types";
+import type { SetType, Unit } from "@/lib/types";
 import { fmtPrev, type ValueField } from "./SetRow";
 import { Icon } from "./ShojinUI";
+
+const SET_TYPES: { value: SetType; label: string }[] = [
+  { value: "normal", label: "Working" },
+  { value: "warmup", label: "Warm-up" },
+  { value: "drop", label: "Drop" },
+];
 
 // RPE below 5 isn't meaningful for tracking, so 1–4 collapse into a single "<5"
 // bucket (stored as 5); the working range 6–10 stays granular.
@@ -35,6 +41,7 @@ interface Props {
   field: ValueField;
   values: { weight: number; reps: number; seconds: number };
   rpe: number | null;
+  setType: SetType;
   unit: Unit;
   isBodyweight: boolean;
   isDuration: boolean;
@@ -42,6 +49,7 @@ interface Props {
   onField: (field: ValueField) => void;
   onInput: (field: ValueField, value: number) => void;
   onRpe: (rpe: number | null) => void;
+  onSetType: (type: SetType) => void;
   onLog: () => void;
   onClose: () => void;
 }
@@ -55,6 +63,7 @@ export function KeypadSheet({
   field,
   values,
   rpe,
+  setType,
   unit,
   isBodyweight,
   isDuration,
@@ -62,6 +71,7 @@ export function KeypadSheet({
   onField,
   onInput,
   onRpe,
+  onSetType,
   onLog,
   onClose,
 }: Props) {
@@ -215,6 +225,30 @@ export function KeypadSheet({
             );
           },
         )}
+      </div>
+
+      {/* set-type selector — full words so warm-up / drop sets are unmistakable */}
+      <div className="mb-2.5 flex items-center gap-1.5">
+        <span className="rp-eyebrow mr-0.5" style={{ fontSize: 9.5 }}>
+          TYPE
+        </span>
+        {SET_TYPES.map((t) => {
+          const on = setType === t.value;
+          return (
+            <button
+              key={t.value}
+              onClick={() => onSetType(t.value)}
+              aria-pressed={on}
+              aria-label={`${t.label} set`}
+              className={[
+                "h-[34px] flex-1 rounded-[10px] font-mono text-[12px] font-semibold",
+                on ? "bg-ink text-bg" : "border border-line bg-surface text-ink-faint",
+              ].join(" ")}
+            >
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* RPE chips */}

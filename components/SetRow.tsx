@@ -184,14 +184,22 @@ export function SetRow({
         title="Tap: working / warm-up / drop · hold: delete set"
         className="flex h-11 flex-col items-center justify-center gap-px"
       >
-        <span
-          className={[
-            "font-mono text-sm font-bold",
-            warm ? "text-ink-faint" : set.setType === "drop" ? "text-amber" : active ? "text-amber" : "text-ink-soft",
-          ].join(" ")}
-        >
-          {warm ? "W" : set.setType === "drop" ? "D" : setIdx + 1}
-        </span>
+        {set.setType === "normal" ? (
+          <span
+            className={["font-mono text-sm font-bold", active ? "text-amber" : "text-ink-soft"].join(" ")}
+          >
+            {setIdx + 1}
+          </span>
+        ) : (
+          <span
+            className={[
+              "flex h-[17px] items-center justify-center rounded-md px-1 font-mono text-[9.5px] font-bold uppercase tracking-tight",
+              warm ? "bg-line text-ink-soft" : "bg-amber-soft text-amber",
+            ].join(" ")}
+          >
+            {warm ? "Warm" : "Drop"}
+          </span>
+        )}
         {set.rpe != null && (
           <span className="font-mono text-[9px] leading-none text-ink-faint">@{set.rpe}</span>
         )}
