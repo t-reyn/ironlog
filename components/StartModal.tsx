@@ -23,6 +23,12 @@ function estimateMinutes(setCount: number): number {
   return Math.max(5, Math.round((setCount * 3.5) / 5) * 5);
 }
 
+/** Local YYYY-MM-DD for a <input type="date"> value (avoids UTC day-shift). */
+function toDateInput(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function TemplateCard({
   template,
   icons,
@@ -104,6 +110,7 @@ export function StartModal({ onClose, onStart }: { onClose: () => void; onStart:
   const workouts = useStore((s) => s.workouts);
   const templates = useStore((s) => s.templates);
   const startBlank = useStore((s) => s.startBlank);
+  const startBackdated = useStore((s) => s.startBackdated);
   const startFromWorkout = useStore((s) => s.startFromWorkout);
   const startFromTemplate = useStore((s) => s.startFromTemplate);
   const exerciseById = useStore((s) => s.exerciseById);
@@ -115,6 +122,9 @@ export function StartModal({ onClose, onStart }: { onClose: () => void; onStart:
   const [editingTpl, setEditingTpl] = useState<TemplateWithSets | null>(null);
   const [managingTpl, setManagingTpl] = useState<TemplateWithSets | null>(null);
   const [readinessOpen, setReadinessOpen] = useState(false);
+  const [pastOpen, setPastOpen] = useState(false);
+  const [todayInput] = useState(() => toDateInput(Date.now()));
+  const [pastDate, setPastDate] = useState(() => toDateInput(Date.now() - 86400000));
 
   const [dateLabel] = useState(() =>
     new Date()
@@ -141,7 +151,7 @@ export function StartModal({ onClose, onStart }: { onClose: () => void; onStart:
     };
   });
 
-  async function doStart(fn: () => void) {
+  async function doStart(fn: () => void, applyReadiness = true) {
     if (draft) {
       const ok = await confirmDialog({
         title: "Replace workout in progress?",
@@ -153,8 +163,14 @@ export function StartModal({ onClose, onStart }: { onClose: () => void; onStart:
       if (!ok) return;
     }
     fn();
-    setDraftReadiness(readiness);
+    // A backdated session carries no "today" readiness check-in.
+    if (applyReadiness) setDraftReadiness(readiness);
     onStart();
+  }
+
+  function startPast() {
+    const at = new Date(`${pastDate}T12:00:00`).getTime();
+    doStart(() => startBackdated(at), false);
   }
 
   async function removeTpl(t: TemplateWithSets) {
@@ -298,6 +314,44 @@ export function StartModal({ onClose, onStart }: { onClose: () => void; onStart:
                   {last ? `${last.name} · ${recentMeta(last).split(" · ")[0]}` : "NOTHING YET"}
                 </div>
               </button>
+            </div>
+
+            {/* log a past workout — backdated session you forgot to record */}
+            <div className="mb-4 rounded-[18px] border border-line-2 bg-surface px-3.5 py-2.5 shadow-[var(--rp-shadow-sm)]">
+              <button
+                onClick={() => setPastOpen((v) => !v)}
+                aria-expanded={pastOpen}
+                className="flex w-full items-center gap-2"
+              >
+                <span className="text-ink-soft">
+                  <Icon name="edit" size={16} color="currentColor" />
+                </span>
+                <span className="flex-1 text-left text-[14px] font-semibold text-ink">Log a past workout</span>
+                <span
+                  className="shrink-0 text-ink-faint transition-transform duration-150"
+                  style={{ display: "inline-block", transform: pastOpen ? "rotate(-90deg)" : "rotate(90deg)" }}
+                >
+                  <Icon name="chevron" size={14} color="currentColor" />
+                </span>
+              </button>
+              {pastOpen && (
+                <div className="mt-3 flex items-center gap-2 pb-1">
+                  <input
+                    type="date"
+                    value={pastDate}
+                    max={todayInput}
+                    onChange={(e) => e.target.value && setPastDate(e.target.value)}
+                    aria-label="Workout date"
+                    className="h-10 flex-1 rounded-lg border border-line bg-surface-2 px-3 text-sm text-ink"
+                  />
+                  <button
+                    onClick={startPast}
+                    className="h-10 shrink-0 rounded-lg bg-amber px-4 font-mono text-[12.5px] font-bold text-on-amber"
+                  >
+                    Log it
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* templates inline */}

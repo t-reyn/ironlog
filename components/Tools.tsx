@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import {
@@ -15,6 +15,7 @@ import {
 import { confirmDialog } from "@/lib/dialog";
 import { toast } from "@/lib/toast";
 import { exportWorkoutsToCsv, downloadCsv } from "@/lib/csv";
+import { parseCsv, ImportError, type ParseResult } from "@/lib/import";
 import { estimateOneRepMax, round1 } from "@/lib/oneRepMax";
 import { MUSCLE_COLORS } from "@/lib/muscles";
 import { ExerciseIcon } from "./ExerciseIcon";
@@ -418,6 +419,7 @@ export function Tools({ userEmail }: { userEmail: string }) {
         >
           Export workouts to CSV
         </button>
+        <ImportWorkouts />
       </section>
 
       {/* Account */}
@@ -627,6 +629,160 @@ export function Tools({ userEmail }: { userEmail: string }) {
         />
       )}
     </div>
+  );
+}
+
+const FORMAT_LABEL: Record<ParseResult["format"], string> = {
+  hevy: "Hevy",
+  strong: "Strong",
+  shojin: "Shojin",
+};
+
+function ImportWorkouts() {
+  const profile = useStore((s) => s.profile);
+  const exercises = useStore((s) => s.exercises);
+  const importWorkouts = useStore((s) => s.importWorkouts);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<{ text: string; result: ParseResult } | null>(null);
+  const [unit, setUnit] = useState<Unit>(profile?.unit ?? "kg");
+  const [busy, setBusy] = useState(false);
+
+  // Estimate how many exercises the import will create (unknown names).
+  const newExerciseCount = useMemo(() => {
+    if (!preview) return 0;
+    const have = new Set(exercises.map((e) => e.name.trim().toLowerCase()));
+    return preview.result.exerciseNames.filter((n) => !have.has(n.trim().toLowerCase())).length;
+  }, [preview, exercises]);
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // let the same file be re-picked later
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const result = parseCsv(text, profile?.unit ?? "kg");
+      if (result.workouts.length === 0) {
+        toast.error("No workouts found in that file.");
+        return;
+      }
+      setUnit(profile?.unit ?? "kg");
+      setPreview({ text, result });
+    } catch (err) {
+      toast.error(err instanceof ImportError ? err.message : "Couldn't read that CSV.");
+    }
+  }
+
+  async function commit() {
+    if (!preview) return;
+    setBusy(true);
+    try {
+      // Re-parse with the chosen unit so ambiguous-unit sources land correctly.
+      const final = parseCsv(preview.text, unit);
+      const res = await importWorkouts(final.workouts);
+      const parts = [`Imported ${res.workouts} workout${res.workouts !== 1 ? "s" : ""}`];
+      if (res.newExercises.length)
+        parts.push(`${res.newExercises.length} new exercise${res.newExercises.length !== 1 ? "s" : ""}`);
+      if (res.skippedDuplicates)
+        parts.push(`${res.skippedDuplicates} duplicate${res.skippedDuplicates !== 1 ? "s" : ""} skipped`);
+      toast.success(parts.join(" · ") + ".");
+      setPreview(null);
+    } catch {
+      toast.error("Import failed — some workouts may not have been saved.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => fileRef.current?.click()}
+        className="mt-2 w-full rounded-lg border border-line py-2.5 text-ink-soft hover:text-ink"
+      >
+        Import workouts from CSV
+      </button>
+      <p className="mt-2 px-1 text-center text-[11px] text-ink-faint">
+        From Strong, Hevy, or a Shojin export.
+      </p>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".csv,text/csv"
+        onChange={onFile}
+        className="sr-only"
+        aria-hidden
+      />
+
+      {preview && (
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/50"
+          onClick={() => !busy && setPreview(null)}
+        >
+          <div
+            className="sheet-up w-full max-w-md rounded-t-[28px] bg-bg px-5 pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-5"
+            style={{ boxShadow: "0 -12px 40px rgba(43,39,37,0.25)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-[18px] font-bold text-ink">Import preview</h3>
+            <p className="mt-1 text-sm text-ink-soft">
+              Detected a{" "}
+              <span className="font-semibold text-ink">{FORMAT_LABEL[preview.result.format]}</span>{" "}
+              export.
+            </p>
+            <ul className="mt-3 flex flex-col gap-1 text-sm text-ink-soft">
+              <li>
+                {preview.result.workouts.length} workouts · {preview.result.setCount} sets
+              </li>
+              {newExerciseCount > 0 && (
+                <li>{newExerciseCount} new exercises will be created (set as “chest” — recategorise below)</li>
+              )}
+              {preview.result.skippedRows > 0 && (
+                <li>{preview.result.skippedRows} unreadable rows skipped</li>
+              )}
+            </ul>
+            {preview.result.ambiguousUnit && (
+              <div className="mt-4">
+                <div className="rp-eyebrow mb-1.5">WEIGHT UNIT</div>
+                <p className="mb-2 text-[12px] text-ink-faint">
+                  This export doesn’t record its unit — pick the one you trained in.
+                </p>
+                <div className="flex gap-2">
+                  {(["kg", "lb"] as Unit[]).map((u) => (
+                    <button
+                      key={u}
+                      onClick={() => setUnit(u)}
+                      aria-pressed={unit === u}
+                      className={[
+                        "h-10 flex-1 rounded-lg text-sm font-semibold",
+                        unit === u ? "bg-ink text-bg" : "border border-line bg-surface-2 text-ink-soft",
+                      ].join(" ")}
+                    >
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => setPreview(null)}
+                disabled={busy}
+                className="h-11 flex-1 rounded-xl border border-line text-sm font-semibold text-ink-soft disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={commit}
+                disabled={busy}
+                className="h-11 flex-1 rounded-xl bg-green text-sm font-bold text-on-green disabled:opacity-60"
+              >
+                {busy ? "Importing…" : "Import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

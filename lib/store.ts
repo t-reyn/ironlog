@@ -11,6 +11,7 @@ import type {
 } from "./types";
 import * as db from "./db";
 import type { TemplateWithSets } from "./db";
+import type { ImportResult, ParsedWorkout } from "./import";
 
 export interface DraftSetEntry {
   weight: number;
@@ -33,6 +34,7 @@ export interface DraftExercise {
 export interface Draft {
   name: string;
   startedAt: number;
+  performedAt?: number; // backdated session time (ms); absent for live workouts
   exercises: DraftExercise[];
   notes: string; // workout comment, saved to workouts.notes
   readiness: Readiness;
@@ -95,6 +97,8 @@ interface StoreState {
 
   // draft actions
   startBlank: () => void;
+  startBackdated: (performedAt: number) => void;
+  setDraftDate: (performedAt: number) => void;
   startFromTemplate: (t: TemplateWithSets) => void;
   startFromWorkout: (w: WorkoutWithSets) => void;
   startEdit: (w: WorkoutWithSets) => void;
@@ -114,6 +118,9 @@ interface StoreState {
   insertDraftSet: (exIdx: number, setIdx: number, set: DraftSetEntry) => void;
   discardDraft: () => void;
   finishWorkout: () => Promise<void>;
+
+  // bulk import of previously-performed workouts (CSV from Strong/Hevy/Shojin)
+  importWorkouts: (parsed: ParsedWorkout[]) => Promise<ImportResult>;
 
   // timer
   startRest: (seconds: number) => void;
@@ -239,6 +246,24 @@ export const useStore = create<StoreState>((set, get) => ({
         readiness: EMPTY_READINESS,
       },
     }),
+
+  startBackdated: (performedAt) =>
+    set({
+      draft: {
+        name: "Workout",
+        startedAt: Date.now(),
+        performedAt,
+        exercises: [],
+        notes: "",
+        readiness: EMPTY_READINESS,
+      },
+    }),
+
+  setDraftDate: (performedAt) => {
+    const draft = get().draft;
+    if (!draft) return;
+    set({ draft: { ...draft, performedAt } });
+  },
 
   startFromTemplate: (t) => {
     const defaultUnit = get().profile?.unit ?? "kg";
@@ -511,10 +536,12 @@ export const useStore = create<StoreState>((set, get) => ({
     if (draft.workoutId) {
       await db.updateWorkout(draft.workoutId, draft.name, sets, workoutNotes);
     } else {
+      const backdated = draft.performedAt != null;
       await db.saveWorkout({
         name: draft.name,
-        performed_at: new Date(draft.startedAt).toISOString(),
-        duration_seconds: Math.round((Date.now() - draft.startedAt) / 1000),
+        performed_at: new Date(draft.performedAt ?? draft.startedAt).toISOString(),
+        // A backdated session has no meaningful elapsed time.
+        duration_seconds: backdated ? null : Math.round((Date.now() - draft.startedAt) / 1000),
         notes: workoutNotes,
         readiness: draft.readiness,
         sets,
@@ -522,6 +549,118 @@ export const useStore = create<StoreState>((set, get) => ({
     }
     set({ draft: null, rest: { ...get().rest, endsAt: null } });
     await get().refreshWorkouts();
+  },
+
+  importWorkouts: async (parsed) => {
+    const empty: ImportResult = { workouts: 0, sets: 0, newExercises: [], skippedDuplicates: 0 };
+    if (parsed.length === 0) return empty;
+    const norm = (s: string) => s.trim().toLowerCase();
+
+    // 1. Resolve exercise names -> ids, creating customs for anything unknown.
+    const idByName = new Map<string, string>();
+    for (const e of get().exercises) {
+      const k = norm(e.name);
+      if (!idByName.has(k)) idByName.set(k, e.id);
+    }
+
+    // Infer exercise_type per name: duration-only if every set is timed, no reps.
+    const seen = new Map<string, { name: string; hasReps: boolean; hasTime: boolean }>();
+    for (const w of parsed) {
+      for (const s of w.sets) {
+        const k = norm(s.exerciseName);
+        const agg = seen.get(k) ?? { name: s.exerciseName, hasReps: false, hasTime: false };
+        if (s.reps > 0) agg.hasReps = true;
+        if (s.durationSeconds && s.durationSeconds > 0) agg.hasTime = true;
+        seen.set(k, agg);
+      }
+    }
+
+    const created: string[] = [];
+    for (const [k, info] of seen) {
+      if (idByName.has(k)) continue;
+      const isDuration = info.hasTime && !info.hasReps;
+      const ex = await db.createCustomExercise({
+        name: info.name,
+        muscle_group: "chest", // placeholder — recategorise in Profile after import
+        movement_pattern: "other",
+        equipment: "other",
+        exercise_type: isDuration ? "duration" : "weight_reps",
+        secondary_muscles: [],
+      });
+      idByName.set(k, ex.id);
+      created.push(info.name);
+    }
+    if (created.length) await get().refreshExercises();
+
+    // 2. Duplicate guard — skip workouts already present (same name + calendar day).
+    const dayKey = (name: string, iso: string) => `${name} ${iso.slice(0, 10)}`;
+    const existingKeys = new Set(get().workouts.map((w) => dayKey(w.name, w.performed_at)));
+
+    let workoutCount = 0;
+    let setCount = 0;
+    let skippedDuplicates = 0;
+
+    // 3. Insert sequentially so a mid-batch failure leaves prior workouts intact.
+    for (const w of parsed) {
+      if (existingKeys.has(dayKey(w.name, w.performedAt))) {
+        skippedDuplicates += 1;
+        continue;
+      }
+
+      // Superset keys -> ints; singleton groups (one exercise) persist as null.
+      const exercisesPerKey = new Map<string, Set<string>>();
+      for (const s of w.sets) {
+        if (!s.supersetKey) continue;
+        const ids = exercisesPerKey.get(s.supersetKey) ?? new Set<string>();
+        ids.add(norm(s.exerciseName));
+        exercisesPerKey.set(s.supersetKey, ids);
+      }
+      const groupNum = new Map<string, number>();
+      let g = 0;
+      for (const [key, ids] of exercisesPerKey) {
+        if (ids.size > 1) groupNum.set(key, (g += 1));
+      }
+
+      // Denormalise the per-exercise note onto every set (app convention).
+      const noteByEx = new Map<string, string | null>();
+      for (const s of w.sets) {
+        const k = norm(s.exerciseName);
+        if (!noteByEx.has(k) && s.note) noteByEx.set(k, s.note);
+      }
+
+      const setIndexByEx = new Map<string, number>();
+      const sets: db.DraftSet[] = w.sets.map((s) => {
+        const k = norm(s.exerciseName);
+        const idx = setIndexByEx.get(k) ?? 0;
+        setIndexByEx.set(k, idx + 1);
+        return {
+          exercise_id: idByName.get(k)!,
+          set_index: idx,
+          weight: s.weight,
+          reps: s.reps,
+          rpe: s.rpe,
+          set_type: s.setType,
+          unit: s.unit,
+          notes: noteByEx.get(k) ?? null,
+          duration_seconds: s.durationSeconds,
+          superset_group: s.supersetKey ? groupNum.get(s.supersetKey) ?? null : null,
+        };
+      });
+
+      await db.saveWorkout({
+        name: w.name,
+        performed_at: w.performedAt,
+        duration_seconds: null,
+        notes: w.notes,
+        sets,
+      });
+      existingKeys.add(dayKey(w.name, w.performedAt));
+      workoutCount += 1;
+      setCount += sets.length;
+    }
+
+    await get().refreshWorkouts();
+    return { workouts: workoutCount, sets: setCount, newExercises: created, skippedDuplicates };
   },
 
   startRest: (seconds) =>

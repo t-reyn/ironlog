@@ -53,6 +53,12 @@ function fmtRest(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 }
 
+/** Local YYYY-MM-DD for a <input type="date"> value (avoids UTC day-shift). */
+function toDateInput(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 interface ExerciseView {
   ex: DraftExercise;
   meta: Exercise | undefined;
@@ -137,6 +143,9 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
   const setPinnedNote = useStore((s) => s.setPinnedNote);
   const discard = useStore((s) => s.discardDraft);
   const finish = useStore((s) => s.finishWorkout);
+  const setDate = useStore((s) => s.setDraftDate);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const [todayInput] = useState(() => toDateInput(Date.now()));
   const exerciseById = useStore((s) => s.exerciseById);
   const profile = useStore((s) => s.profile);
   const refreshTemplates = useStore((s) => s.refreshTemplates);
@@ -466,12 +475,50 @@ export function WorkoutLogger({ onClose }: { onClose: () => void }) {
         >
           <Icon name="chevron" size={18} color="currentColor" style={{ transform: "rotate(180deg)" }} />
         </button>
-        <button onClick={renameWorkout} className="min-w-0 flex-1 text-left" title="Tap to rename">
-          <div className="truncate text-[17px] font-bold tracking-[-0.015em] text-ink">{draft.name}</div>
+        <div className="min-w-0 flex-1">
+          <button
+            onClick={renameWorkout}
+            className="block w-full truncate text-left text-[17px] font-bold tracking-[-0.015em] text-ink"
+            title="Tap to rename"
+          >
+            {draft.name}
+          </button>
           <div className="mt-px font-mono text-[11.5px] text-ink-faint">
-            <span className="font-semibold text-amber">{elapsedStr}</span> · {completedSets}/{totalSets} SETS
+            {draft.performedAt != null ? (
+              <button
+                onClick={() => {
+                  const el = dateInputRef.current;
+                  if (!el) return;
+                  if (el.showPicker) el.showPicker();
+                  else el.focus();
+                }}
+                className="font-semibold text-amber"
+                title="Tap to change the date"
+              >
+                {new Date(draft.performedAt)
+                  .toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                  .toUpperCase()}
+              </button>
+            ) : (
+              <span className="font-semibold text-amber">{elapsedStr}</span>
+            )}
+            {" · "}
+            {completedSets}/{totalSets} SETS
+            {draft.performedAt != null && (
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={toDateInput(draft.performedAt)}
+                max={todayInput}
+                onChange={(e) => {
+                  if (e.target.value) setDate(new Date(`${e.target.value}T12:00:00`).getTime());
+                }}
+                aria-label="Workout date"
+                className="sr-only"
+              />
+            )}
           </div>
-        </button>
+        </div>
         <button
           onClick={onFinish}
           disabled={saving}
