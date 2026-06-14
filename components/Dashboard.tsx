@@ -35,6 +35,40 @@ function fmtK(v: number): string {
   return `${Math.round(v)}`;
 }
 
+/** Compact weekly-goal ring: trained days this week vs the profile target. */
+function GoalRing({ value, target }: { value: number; target: number }) {
+  const r = 18;
+  const circ = 2 * Math.PI * r;
+  const pct = target > 0 ? Math.min(1, value / target) : 0;
+  const done = target > 0 && value >= target;
+  return (
+    <div className="relative flex h-[46px] w-[46px] shrink-0 items-center justify-center">
+      <svg width={46} height={46} viewBox="0 0 46 46" className="-rotate-90">
+        <circle cx={23} cy={23} r={r} fill="none" stroke="var(--color-surface-2)" strokeWidth={5} />
+        <circle
+          cx={23}
+          cy={23}
+          r={r}
+          fill="none"
+          stroke={done ? "var(--color-green)" : "var(--color-amber)"}
+          strokeWidth={5}
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={circ * (1 - pct)}
+          className="transition-[stroke-dashoffset] duration-500 motion-reduce:transition-none"
+        />
+      </svg>
+      <div className="absolute">
+        {done ? (
+          <Icon name="check" size={18} color="var(--color-green)" sw={2.8} />
+        ) : (
+          <span className="font-mono text-[13px] font-bold leading-none">{value}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard({
   onStart,
   onContinue,
@@ -186,6 +220,8 @@ export function Dashboard({
   }
 
   const bestStreak = view.current > 0 && view.current >= view.longest;
+  const weeklyTarget = profile?.days_per_week ?? null;
+  const weekDone = view.weekDays.filter((d) => d.done).length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -251,8 +287,25 @@ export function Dashboard({
         </div>
       </div>
 
-      {/* week strip */}
+      {/* week strip — with a weekly-goal ring when a target is set */}
       <div className="rounded-[28px] border border-line-2 bg-surface px-3.5 py-4 shadow-[var(--rp-shadow-sm)]">
+        {weeklyTarget !== null && (
+          <div className="mb-3.5 flex items-center justify-between px-0.5">
+            <div>
+              <Eyebrow>THIS WEEK</Eyebrow>
+              <div className="mt-1 text-[15px] font-bold tracking-[-0.015em]">
+                {weekDone >= weeklyTarget ? (
+                  <>Goal hit — {weekDone} day{weekDone !== 1 ? "s" : ""}</>
+                ) : (
+                  <>
+                    {weekDone} of {weeklyTarget} day{weeklyTarget !== 1 ? "s" : ""}
+                  </>
+                )}
+              </div>
+            </div>
+            <GoalRing value={weekDone} target={weeklyTarget} />
+          </div>
+        )}
         <WeekStrip days={view.weekDays} />
       </div>
 
